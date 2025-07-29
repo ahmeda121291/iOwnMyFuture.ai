@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import ErrorBoundary from './components/Shared/ErrorBoundary';
 import Navbar from './components/Shared/Navbar';
 import Footer from './components/Shared/Footer';
 import LandingPage from './pages';
@@ -15,24 +16,26 @@ import JournalEntryPage from './pages/JournalEntry';
 
 function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-background">
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/pricing" element={<PricingPage />} />
-          <Route path="/success" element={<SuccessPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/journal" element={<JournalPage />} />
-          <Route path="/journal/:entryId" element={<JournalEntryPage />} />
-          <Route path="/moodboard" element={<MoodboardPage />} />
-          <Route path="/insights" element={<InsightsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-        </Routes>
-        <Footer />
-      </div>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <div className="min-h-screen bg-background">
+          <Navbar />
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/success" element={<SuccessPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/journal" element={<JournalPage />} />
+            <Route path="/journal/:entryId" element={<JournalEntryPage />} />
+            <Route path="/moodboard" element={<MoodboardPage />} />
+            <Route path="/insights" element={<InsightsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Routes>
+          <Footer />
+        </div>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

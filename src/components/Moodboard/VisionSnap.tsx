@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Camera, Image, Type, Target, Plus, Sparkles } from 'lucide-react';
+import { generateAdvancedMoodboard } from '../../lib/openai';
 import Button from '../Shared/Button';
 
 interface VisionSnapProps {
