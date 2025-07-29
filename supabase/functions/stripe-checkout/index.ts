@@ -2,16 +2,18 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
-const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY')!;
+// Read environment variables from the Edge Function secrets
+const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
+const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
+const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
+
+// Initialize clients
+const supabase = createClient(supabaseUrl, serviceRoleKey);
 const stripe = new Stripe(stripeSecret, {
-  appInfo: {
-    name: 'Bolt Integration',
-    version: '1.0.0',
-  },
+  appInfo: { name: 'Bolt Integration', version: '1.0.0' },
 });
 
-// Helper function to create responses with CORS headers
+// Helper to build CORS responses
 function corsResponse(body: string | object | null, status = 200) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -19,17 +21,13 @@ function corsResponse(body: string | object | null, status = 200) {
     'Access-Control-Allow-Headers': '*',
   };
 
-  // For 204 No Content, don't include Content-Type or body
   if (status === 204) {
     return new Response(null, { status, headers });
   }
 
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      ...headers,
-      'Content-Type': 'application/json',
-    },
+    headers: { ...headers, 'Content-Type': 'application/json' },
   });
 }
 
@@ -83,21 +81,16 @@ Deno.serve(async (req) => {
 
     if (getCustomerError) {
       console.error('Failed to fetch customer information from the database', getCustomerError);
-
       return corsResponse({ error: 'Failed to fetch customer information' }, 500);
     }
 
-    let customerId;
+    let customerId: string;
 
-    /**
-     * In case we don't have a mapping yet, the customer does not exist and we need to create one.
-     */
+    // Create Stripe customer mapping if none exists
     if (!customer || !customer.customer_id) {
       const newCustomer = await stripe.customers.create({
         email: user.email,
-        metadata: {
-          userId: user.id,
-        },
+        metadata: { userId: user.id },
       });
 
       console.log(`Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
@@ -109,15 +102,12 @@ Deno.serve(async (req) => {
 
       if (createCustomerError) {
         console.error('Failed to save customer information in the database', createCustomerError);
-
-        // Try to clean up both the Stripe customer and subscription record
         try {
           await stripe.customers.del(newCustomer.id);
           await supabase.from('stripe_subscriptions').delete().eq('customer_id', newCustomer.id);
         } catch (deleteError) {
           console.error('Failed to clean up after customer mapping error:', deleteError);
         }
-
         return corsResponse({ error: 'Failed to create customer mapping' }, 500);
       }
 
@@ -129,20 +119,16 @@ Deno.serve(async (req) => {
 
         if (createSubscriptionError) {
           console.error('Failed to save subscription in the database', createSubscriptionError);
-
-          // Try to clean up the Stripe customer since we couldn't create the subscription
           try {
             await stripe.customers.del(newCustomer.id);
           } catch (deleteError) {
             console.error('Failed to delete Stripe customer after subscription creation error:', deleteError);
           }
-
           return corsResponse({ error: 'Unable to save the subscription in the database' }, 500);
         }
       }
 
       customerId = newCustomer.id;
-
       console.log(`Successfully set up new customer ${customerId} with subscription record`);
     } else {
       customerId = customer.customer_id;
@@ -157,7 +143,6 @@ Deno.serve(async (req) => {
 
         if (getSubscriptionError) {
           console.error('Failed to fetch subscription information from the database', getSubscriptionError);
-
           return corsResponse({ error: 'Failed to fetch subscription information' }, 500);
         }
 
@@ -170,23 +155,17 @@ Deno.serve(async (req) => {
 
           if (createSubscriptionError) {
             console.error('Failed to create subscription record for existing customer', createSubscriptionError);
-
             return corsResponse({ error: 'Failed to create subscription record for existing customer' }, 500);
           }
         }
       }
     }
 
-    // create Checkout Session
+    // Create Stripe Checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
-      line_items: [
-        {
-          price: price_id,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: price_id, quantity: 1 }],
       mode,
       success_url,
       cancel_url,
@@ -222,6 +201,5 @@ function validateParameters<T extends Record<string, any>>(values: T, expected: 
       }
     }
   }
-
   return undefined;
 }
