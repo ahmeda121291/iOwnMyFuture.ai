@@ -40,7 +40,7 @@ export default function SuccessPage() {
               Payment Successful!
             </h1>
             <p className="text-text-secondary">
-              Welcome to MoodBoard.ai! Your subscription is now active and you have full access to all features.
+              Welcome to iOwnMyFuture.ai! Your subscription is now active and you have full access to all features.
             </p>
           </div>
 

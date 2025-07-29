@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="container mx-auto px-4 text-center">
         <div className="flex items-center justify-center space-x-2 mb-4">
           <div className="w-6 h-6 rounded-full bg-gradient-to-r from-primary to-accent"></div>
-          <span className="text-lg font-semibold text-primary">MoodBoard.ai</span>
+          <span className="text-lg font-semibold text-primary">iOwnMyFuture.ai</span>
         </div>
         
         <p className="text-text-secondary mb-4">
@@ -22,7 +22,7 @@ export default function Footer() {
         
         <div className="mt-4 pt-4 border-t border-primary/10">
           <p className="text-sm text-text-secondary">
-            © 2024 MoodBoard.ai. All rights reserved.
+            © 2024 iOwnMyFuture.ai. All rights reserved.
           </p>
         </div>
       </div>

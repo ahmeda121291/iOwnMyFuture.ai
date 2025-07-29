@@ -11,7 +11,7 @@ export default function PricingPage() {
             Choose Your Plan
           </h1>
           <p className="text-xl text-text-secondary max-w-2xl mx-auto">
-            Select the perfect plan to start your transformation journey with AI-powered vision boards and journaling.
+            Select the perfect plan to start your transformation journey with iOwnMyFuture.ai
           </p>
         </div>
 
