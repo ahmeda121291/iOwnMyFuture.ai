@@ -38,7 +38,7 @@ export default function Navbar() {
           onClick={() => navigate('/')}
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent"></div>
-          <h1 className="text-xl font-bold text-primary">MoodBoard.ai</h1>
+          <h1 className="text-xl font-bold text-primary">iOwnMyFuture.ai</h1>
         </div>
 
         {/* Desktop Navigation */}
