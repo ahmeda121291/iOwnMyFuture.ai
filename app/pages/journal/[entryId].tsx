@@ -10,7 +10,7 @@ import {
   Share,
   Download 
 } from 'lucide-react';
-import { getCurrentUser, supabase } from '../lib/supabase';
+import { getCurrentUser, supabase } from '../../../lib/supabase';
 import { summarizeJournalEntry } from '../lib/openai';
 import JournalEntryForm from '../components/Journal/JournalEntryForm';
 import Button from '../components/Shared/Button';
