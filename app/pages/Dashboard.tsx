@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus } from 'lucide-react';
 import { getCurrentUser, getUserSubscription } from '../lib/supabase.ts';
-import { getProductByPriceId } from '../stripe-config';
+import { getProductByPriceId } from '../lib/stripeConfig';
 import Button from '../components/Shared/Button';
 import Loader from '../components/Shared/Loader';
 import SubscriptionStatus from '../components/Subscription/SubscriptionStatus';

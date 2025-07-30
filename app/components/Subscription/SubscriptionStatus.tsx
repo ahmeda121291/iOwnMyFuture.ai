@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Crown, Calendar, CreditCard } from 'lucide-react';
-import { getUserSubscription } from '../../api/auth.ts';
-import { getProductByPriceId } from '../../stripe-config';
+import { getUserSubscription } from '../../lib/supabase';
+import { getProductByPriceId } from '../../lib/stripeConfig';
 import Loader from '../Shared/Loader';
 
 export default function SubscriptionStatus() {

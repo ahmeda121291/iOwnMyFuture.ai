@@ -1,5 +1,5 @@
 import React from 'react';
-import { products } from '../stripe-config';
+import { products } from '../lib/stripeConfig';
 import PricingCard from '../components/Pricing/PricingCard';
 
 export default function PricingPage() {
