@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, BookOpen, Filter } from 'lucide-react';
+import { Plus, BookOpen, Filter, Calendar, TrendingUp, Award, Target } from 'lucide-react';
 import { getCurrentUser, supabase } from '../lib/supabase';
 import { summarizeJournalEntry } from '../lib/openai';
 import JournalCalendar from '../components/Journal/JournalCalendar';
@@ -22,6 +22,8 @@ export default function JournalPage() {
   const [editingEntry, setEditingEntry] = useState<any>(null);
   const [viewingEntry, setViewingEntry] = useState<any>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'month' | 'week'>('month');
+  const [journalStreak, setJournalStreak] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,6 +35,12 @@ export default function JournalPage() {
       loadEntries();
     }
   }, [user, selectedDate, filterMode]);
+
+  useEffect(() => {
+    if (entries.length > 0) {
+      calculateStreaks();
+    }
+  }, [entries]);
 
   const initializePage = async () => {
     try {
@@ -48,6 +56,85 @@ export default function JournalPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateStreaks = () => {
+    if (entries.length === 0) {
+      setJournalStreak(0);
+      setLongestStreak(0);
+      return;
+    }
+
+    // Sort entries by date
+    const sortedEntries = [...entries].sort((a, b) => 
+      new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime()
+    );
+
+    // Calculate current streak
+    let currentStreak = 0;
+    let maxStreak = 0;
+    let tempStreak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Check if there's an entry for today or yesterday to start streak
+    const mostRecentEntry = new Date(sortedEntries[0].entry_date);
+    mostRecentEntry.setHours(0, 0, 0, 0);
+    
+    const daysDiff = Math.floor((today.getTime() - mostRecentEntry.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff <= 1) {
+      // Start calculating from the most recent entry
+      let checkDate = new Date(mostRecentEntry);
+      
+      for (let i = 0; i < sortedEntries.length; i++) {
+        const entryDate = new Date(sortedEntries[i].entry_date);
+        entryDate.setHours(0, 0, 0, 0);
+        
+        if (entryDate.getTime() === checkDate.getTime()) {
+          currentStreak++;
+          tempStreak++;
+          maxStreak = Math.max(maxStreak, tempStreak);
+          checkDate.setDate(checkDate.getDate() - 1);
+        } else {
+          // Check if we missed a day
+          const expectedDate = new Date(checkDate);
+          expectedDate.setDate(expectedDate.getDate() + 1);
+          
+          if (entryDate.getTime() < expectedDate.getTime()) {
+            // There's a gap, reset current streak but continue for max streak calculation
+            if (i === 0) currentStreak = 0;
+            tempStreak = 1;
+            checkDate = new Date(entryDate);
+            checkDate.setDate(checkDate.getDate() - 1);
+          }
+        }
+      }
+    }
+
+    // Calculate longest streak separately
+    tempStreak = 0;
+    for (let i = 0; i < sortedEntries.length; i++) {
+      if (i === 0) {
+        tempStreak = 1;
+      } else {
+        const currentDate = new Date(sortedEntries[i].entry_date);
+        const previousDate = new Date(sortedEntries[i - 1].entry_date);
+        const diffTime = previousDate.getTime() - currentDate.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 1) {
+          tempStreak++;
+        } else {
+          maxStreak = Math.max(maxStreak, tempStreak);
+          tempStreak = 1;
+        }
+      }
+    }
+    maxStreak = Math.max(maxStreak, tempStreak);
+
+    setJournalStreak(currentStreak);
+    setLongestStreak(maxStreak);
   };
 
   const loadEntries = async () => {
@@ -233,27 +320,81 @@ export default function JournalPage() {
               }}
             />
 
-            {/* Stats */}
-            <div className="card">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Journal Stats</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Total Entries</span>
-                  <span className="font-semibold text-text-primary">{entries.length}</span>
+            {/* Enhanced Stats */}
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+              <div className="bg-gradient-to-r from-primary/10 to-accent/10 px-6 py-4 border-b border-gray-100">
+                <h3 className="text-lg font-semibold text-text-primary flex items-center">
+                  <TrendingUp className="w-5 h-5 mr-2 text-accent" />
+                  Journal Stats
+                </h3>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
+                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <BookOpen className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-2xl font-bold text-blue-600">{entries.length}</div>
+                    <div className="text-xs text-blue-600 font-medium">Total Entries</div>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-xl">
+                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Calendar className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {entries.filter(entry => {
+                        const entryDate = new Date(entry.entry_date);
+                        const now = new Date();
+                        return entryDate.getMonth() === now.getMonth() && entryDate.getFullYear() === now.getFullYear();
+                      }).length}
+                    </div>
+                    <div className="text-xs text-green-600 font-medium">This Month</div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">This Month</span>
-                  <span className="font-semibold text-text-primary">
-                    {entries.filter(entry => {
-                      const entryDate = new Date(entry.entry_date);
-                      const now = new Date();
-                      return entryDate.getMonth() === now.getMonth() && entryDate.getFullYear() === now.getFullYear();
-                    }).length}
-                  </span>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl">
+                    <div className="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Target className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-2xl font-bold text-purple-600">{journalStreak}</div>
+                    <div className="text-xs text-purple-600 font-medium">Current Streak</div>
+                  </div>
+                  
+                  <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl">
+                    <div className="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Award className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-2xl font-bold text-amber-600">{longestStreak}</div>
+                    <div className="text-xs text-amber-600 font-medium">Best Streak</div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-text-secondary">Streak</span>
-                  <span className="font-semibold text-text-primary">1 day</span>
+
+                {/* Progress towards goals */}
+                <div className="pt-4 border-t border-gray-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm text-text-secondary">Monthly Goal</span>
+                    <span className="text-sm font-semibold text-text-primary">
+                      {entries.filter(entry => {
+                        const entryDate = new Date(entry.entry_date);
+                        const now = new Date();
+                        return entryDate.getMonth() === now.getMonth() && entryDate.getFullYear() === now.getFullYear();
+                      }).length}/20
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-primary to-accent h-2 rounded-full transition-all duration-300"
+                      style={{ 
+                        width: `${Math.min(100, (entries.filter(entry => {
+                          const entryDate = new Date(entry.entry_date);
+                          const now = new Date();
+                          return entryDate.getMonth() === now.getMonth() && entryDate.getFullYear() === now.getFullYear();
+                        }).length / 20) * 100)}%` 
+                      }}
+                    ></div>
+                  </div>
                 </div>
               </div>
             </div>

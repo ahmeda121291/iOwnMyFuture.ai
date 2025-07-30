@@ -197,3 +197,47 @@ export default function EntrySummaryCard({ entry, onView, onEdit, onDelete, show
     </div>
   );
 }
+            title="View full entry"
+          >
+            <Eye className="w-4 h-4 text-purple-600" />
+          </button>
+        )}
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onView(entry);
+          }}
+          className="p-2 rounded-full hover:bg-blue-50 transition-colors"
+          title="Quick view"
+        >
+          <Eye className="w-4 h-4 text-blue-600" />
+        </button>
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(entry);
+          }}
+          className="p-2 rounded-full hover:bg-green-50 transition-colors"
+          title="Edit entry"
+        >
+          <Edit3 className="w-4 h-4 text-green-600" />
+        </button>
+        
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (confirm('Are you sure you want to delete this journal entry?')) {
+              onDelete(entry.id);
+            }
+          }}
+          className="p-2 rounded-full hover:bg-red-50 transition-colors"
+          title="Delete entry"
+        >
+          <Trash2 className="w-4 h-4 text-red-600" />
+        </button>
+      </div>
+    </div>
+  );
+}
