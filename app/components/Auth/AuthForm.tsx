@@ -52,12 +52,12 @@ export default function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProp
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <div className="card">
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-text-primary mb-2">
+      <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-text-primary mb-3">
             {mode === 'login' ? 'Welcome Back' : 'Create Account'}
           </h2>
-          <p className="text-text-secondary">
+          <p className="text-text-secondary text-lg">
             {mode === 'login' 
               ? 'Sign in to continue your journey' 
               : 'Start your transformation today'
@@ -66,29 +66,29 @@ export default function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProp
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
+            <p className="text-red-600 text-sm font-medium">{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-600 text-sm">{success}</p>
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-2xl">
+            <p className="text-green-600 text-sm font-medium">{success}</p>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">
+            <label className="block text-sm font-semibold text-text-primary mb-3">
               Email Address
             </label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary w-5 h-5" />
+              <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-colors"
+                className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-full focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all duration-300 bg-gray-50 focus:bg-white"
                 placeholder="Enter your email"
                 required
               />
@@ -96,16 +96,16 @@ export default function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProp
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">
+            <label className="block text-sm font-semibold text-text-primary mb-3">
               Password
             </label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary w-5 h-5" />
+              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-colors"
+                className="w-full pl-12 pr-14 py-4 border-2 border-gray-200 rounded-full focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all duration-300 bg-gray-50 focus:bg-white"
                 placeholder="Enter your password"
                 required
                 minLength={6}
@@ -113,7 +113,7 @@ export default function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProp
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-accent transition-colors p-1"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -122,16 +122,16 @@ export default function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProp
 
           {mode === 'signup' && (
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-2">
+              <label className="block text-sm font-semibold text-text-primary mb-3">
                 Confirm Password
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-secondary w-5 h-5" />
+                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-colors"
+                  className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-full focus:ring-2 focus:ring-primary focus:border-primary outline-none transition-all duration-300 bg-gray-50 focus:bg-white"
                   placeholder="Confirm your password"
                   required
                   minLength={6}
@@ -142,22 +142,23 @@ export default function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProp
 
           <Button
             type="submit"
-            className="w-full"
+            className="w-full rounded-full py-4 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
             loading={loading}
             disabled={loading}
+            onClick={() => {}}
           >
             {mode === 'login' ? 'Sign In' : 'Create Account'}
           </Button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-text-secondary">
+        <div className="mt-8 text-center">
+          <p className="text-text-secondary text-base">
             {mode === 'login' ? "Don't have an account? " : "Already have an account? "}
             <button
               onClick={() => onModeChange(mode === 'login' ? 'signup' : 'login')}
-              className="text-accent hover:text-accent/80 font-medium transition-colors"
+              className="text-accent hover:text-accent/80 font-semibold transition-colors underline decoration-2 underline-offset-2"
             >
-              {mode === 'login' ? 'Sign up' : 'Sign in'}
+              {mode === 'login' ? 'Sign up here' : 'Sign in here'}
             </button>
           </p>
         </div>
