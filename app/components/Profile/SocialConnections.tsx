@@ -9,7 +9,7 @@ import {
   AlertCircle,
   Settings 
 } from 'lucide-react';
-import { supabase, getCurrentUser } from '../../../lib/supabase';
+import { supabase, getCurrentUser } from '../../lib/supabase';
 import Button from '../Shared/Button';
 
 const socialServices = [

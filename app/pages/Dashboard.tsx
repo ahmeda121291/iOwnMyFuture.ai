@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus } from 'lucide-react';
-import { getCurrentUser, getUserSubscription } from '../../../lib/supabase';
+import { getCurrentUser, getUserSubscription } from '../lib/supabase';
 import { getProductByPriceId } from '../lib/stripeConfig';
 import Button from '../components/Shared/Button';
 import Loader from '../components/Shared/Loader';

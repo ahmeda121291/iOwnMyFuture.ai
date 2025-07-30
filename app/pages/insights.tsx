@@ -10,7 +10,7 @@ import {
   Download,
   RefreshCw 
 } from 'lucide-react';
-import { getCurrentUser, supabase } from '../../lib/supabase';
+import { getCurrentUser, supabase } from '../lib/supabase';
 import { generateInsightReport } from '../lib/openai';
 import ProgressChart from '../components/Analytics/ProgressChart';
 import InsightCard from '../components/Analytics/InsightCard';

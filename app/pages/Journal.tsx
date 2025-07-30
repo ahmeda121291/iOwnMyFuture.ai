@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, Filter } from 'lucide-react';
-import { getCurrentUser, supabase } from '../../lib/supabase';
+import { getCurrentUser, supabase } from '../lib/supabase';
 import { summarizeJournalEntry } from '../lib/openai';
 import JournalCalendar from '../components/Journal/JournalCalendar';
 import JournalEntryForm from '../components/Journal/JournalEntryForm';

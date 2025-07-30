@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Settings, Link as LinkIcon, LogOut } from 'lucide-react';
-import { getCurrentUser, signOut, supabase } from '../../lib/supabase';
+import { getCurrentUser, signOut, supabase } from '../lib/supabase';
 import ProfileHeader from '../components/Profile/ProfileHeader';
 import SocialConnections from '../components/Profile/SocialConnections';
 import AccountSettings from '../components/Profile/AccountSettings';

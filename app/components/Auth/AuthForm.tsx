@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
-import { signIn, signUp } from '../../../lib/supabase';
+import { signIn, signUp } from '../../lib/supabase';
 import Button from '../Shared/Button';
 
 interface AuthFormProps {

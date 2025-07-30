@@ -10,12 +10,12 @@ import {
   Share,
   Download 
 } from 'lucide-react';
-import { getCurrentUser, supabase } from '../../../lib/supabase';
-import { summarizeJournalEntry } from '../lib/openai';
-import JournalEntryForm from '../components/Journal/JournalEntryForm';
-import Button from '../components/Shared/Button';
-import Modal from '../components/Shared/Modal';
-import Loader from '../components/Shared/Loader';
+import { getCurrentUser, supabase } from '../../lib/supabase';
+import { summarizeJournalEntry } from '../../lib/openai';
+import JournalEntryForm from '../../components/Journal/JournalEntryForm';
+import Button from '../../components/Shared/Button';
+import Modal from '../../components/Shared/Modal';
+import Loader from '../../components/Shared/Loader';
 
 export default function JournalEntryPage() {
   const { entryId } = useParams();

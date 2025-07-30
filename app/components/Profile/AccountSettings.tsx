@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Eye, EyeOff, Shield, Bell, Palette } from 'lucide-react';
-import { getCurrentUser, supabase } from '../../../lib/supabase';
+import { getCurrentUser, supabase } from '../../lib/supabase';
 import Button from '../Shared/Button';
 
 export default function AccountSettings() {
