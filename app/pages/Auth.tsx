@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser } from '../lib/supabase';
+import { getCurrentUser } from '../../lib/supabase';
 import AuthForm from '../components/Auth/AuthForm';
 import Loader from '../components/Shared/Loader';
 

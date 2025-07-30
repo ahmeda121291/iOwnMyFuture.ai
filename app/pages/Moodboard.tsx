@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Palette, Save, Eye, Edit, Plus, Sparkles } from 'lucide-react';
-import { getCurrentUser, supabase } from '../lib/supabase';
+import { getCurrentUser, supabase } from '../../lib/supabase';
 import { generateMoodboard } from '../lib/openai';
 import MoodboardCanvas from '../components/Moodboard/MoodboardCanvas';
 import VisionSnap from '../components/Moodboard/VisionSnap';
