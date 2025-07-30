@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { User, LogOut, Menu, X } from 'lucide-react'
-import { supabase, getCurrentUser, signOut } from '../../lib/supabase'
+import { supabase, getCurrentUser, signOut } from '../../api/auth'
 import { useNavigate } from 'react-router-dom'
 
 export default function Navbar() {

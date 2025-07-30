@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Zap } from 'lucide-react';
 import { Product } from '../../stripe-config';
-import { createCheckoutSession } from '../../lib/stripe';
+import { createCheckoutSession } from '../../api/stripeWebhook';
 import Button from '../Shared/Button';
 
 interface PricingCardProps {

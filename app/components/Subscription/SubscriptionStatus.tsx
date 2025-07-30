@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Crown, Calendar, CreditCard } from 'lucide-react';
-import { getUserSubscription } from '../../lib/supabase.ts';
+import { getUserSubscription } from '../../api/auth.ts';
 import { getProductByPriceId } from '../../stripe-config';
 import Loader from '../Shared/Loader';
 
