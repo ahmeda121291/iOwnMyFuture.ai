@@ -9,7 +9,7 @@ import AppLayout from './components/Shared/AppLayout';
 import Loader from './components/Shared/Loader';
 
 // Pages
-import LandingPage from './pages';
+import LandingPage from './pages/index';
 import AuthPage from './pages/Auth';
 import PricingPage from './pages/Pricing';
 import SuccessPage from './pages/Success';
@@ -21,7 +21,7 @@ import InsightsPage from './pages/insights';
 import ProfilePage from './pages/Profile';
 
 function AppRouter() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
