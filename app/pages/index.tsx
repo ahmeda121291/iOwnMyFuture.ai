@@ -96,15 +96,16 @@ export default function LandingPage() {
               <ArrowRight className="w-4 h-4 ml-2" />
             </div>
 
-            {/* Main Headline */}
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-gray-900 via-primary-600 to-accent-600 mb-6 leading-tight">
-              Unlock Your
-              <br />
-              <span className="relative">
-                Future
-                <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-primary-400 to-accent-400 rounded-full transform scale-x-0 animate-[scaleX_1s_ease-out_0.5s_forwards] origin-left"></div>
-              </span>
-            </h1>
+         <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-transparent leading-tight">
+  <span className="bg-clip-text bg-gradient-to-r from-gray-900 via-primary-600 to-accent-600">
+    Unlock Your
+  </span>
+  <br />
+  <span className="relative bg-clip-text bg-gradient-to-r from-gray-900 via-primary-600 to-accent-600">
+    Future
+    <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-primary-400 to-accent-400 rounded-full transform scale-x-0 animate-[scaleX_1s_ease-out_0.5s_forwards] origin-left"></div>
+  </span>
+</h1>
 
             {/* Subheadline */}
             <p className="text-xl md:text-2xl lg:text-3xl text-gray-700 mb-12 max-w-4xl mx-auto leading-relaxed font-light">
