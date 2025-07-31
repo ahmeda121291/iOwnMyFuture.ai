@@ -268,8 +268,19 @@ export default function MoodboardCanvas({ elements, onElementsChange, onSave, is
             
             <button
               onClick={() => {
-                // TODO: Implement share functionality
-                alert('Share functionality coming soon!');
+                const shareData = {
+                  title: 'My Vision Board',
+                  text: 'Check out my vision board - visualizing my future goals and dreams!',
+                  url: window.location.href
+                };
+                
+                if (navigator.share) {
+                  navigator.share(shareData);
+                } else {
+                  // Fallback: copy to clipboard
+                  navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}\n${shareData.url}`);
+                  alert('Vision board details copied to clipboard!');
+                }
               }}
               className="px-4 py-2 bg-white border border-accent text-accent rounded-lg hover:bg-accent hover:text-white transition-colors flex items-center"
             >

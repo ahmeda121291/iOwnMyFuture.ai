@@ -2,6 +2,17 @@ import React from 'react'
 import { Heart, Twitter, Instagram, Linkedin, Mail } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
+interface SocialButtonProps {
+  href: string
+  icon: React.ReactNode
+  label: string
+}
+
+interface FooterLinkProps {
+  children: React.ReactNode
+  onClick: () => void
+}
+
 export default function Footer() {
   const navigate = useNavigate()
 
@@ -100,7 +111,7 @@ export default function Footer() {
 }
 
 // Helper Components
-function SocialButton({ href, icon, label }) {
+function SocialButton({ href, icon, label }: SocialButtonProps) {
   return (
     <a
       href={href}
@@ -114,7 +125,7 @@ function SocialButton({ href, icon, label }) {
   )
 }
 
-function FooterLink({ children, onClick }) {
+function FooterLink({ children, onClick }: FooterLinkProps) {
   return (
     <button
       onClick={onClick}

@@ -558,7 +558,7 @@ export default function MoodboardPage() {
               score={calculateVisionScore()}
               numberOfJournalEntries={journalStats.totalEntries}
               numberOfGoals={elements.filter(e => e.type === 'goal').length}
-              numberOfCompletedGoals={0} // TODO: Implement goal completion tracking
+              numberOfCompletedGoals={elements.filter(e => e.type === 'goal' && e.metadata?.completed).length}
               daysActive={journalStats.currentStreak}
             />
 

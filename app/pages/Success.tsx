@@ -1,23 +1,84 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle, ArrowRight } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { 
+  CheckCircle, 
+  Sparkles, 
+  ArrowRight, 
+  BookOpen, 
+  Target,
+  Calendar,
+  Mail,
+  Gift,
+  Download
+} from 'lucide-react';
 import Button from '../components/Shared/Button';
 import Loader from '../components/Shared/Loader';
+
+interface SessionDetails {
+  sessionId: string;
+  amount: number;
+  plan: string;
+  email: string;
+}
 
 export default function SuccessPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
+  
   const sessionId = searchParams.get('session_id');
 
   useEffect(() => {
     // Simulate a brief loading period to show the success animation
     const timer = setTimeout(() => {
       setLoading(false);
+      if (sessionId) {
+        // In a real app, you'd fetch session details from your backend
+        setSessionDetails({
+          sessionId,
+          amount: 180, // This would come from the session
+          plan: 'Pro Annual',
+          email: 'user@example.com'
+        });
+      }
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [sessionId]);
+
+  const nextSteps = [
+    {
+      icon: <Target className="w-6 h-6" />,
+      title: "Create Your First Vision Board",
+      description: "Start manifesting your dreams with AI-powered vision boards",
+      action: "Go to Moodboard",
+      path: "/moodboard"
+    },
+    {
+      icon: <BookOpen className="w-6 h-6" />,
+      title: "Start Journaling",
+      description: "Begin your daily reflection journey with AI insights",
+      action: "Write First Entry",
+      path: "/journal"
+    },
+    {
+      icon: <Calendar className="w-6 h-6" />,
+      title: "Set Your Goals",
+      description: "Define your aspirations and track your progress",
+      action: "Set Goals",
+      path: "/dashboard"
+    }
+  ];
+
+  const benefits = [
+    "Unlimited AI-powered vision boards",
+    "Smart journaling with AI summaries",
+    "Advanced progress analytics",
+    "Priority customer support",
+    "Mobile app access",
+    "Cloud sync across devices"
+  ];
 
   if (loading) {
     return (
@@ -31,53 +92,154 @@ export default function SuccessPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-background to-primary/10 flex items-center justify-center py-12 px-4">
-      <div className="max-w-md w-full">
-        <div className="card text-center">
-          <div className="mb-6">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
-              Payment Successful!
-            </h1>
-            <p className="text-text-secondary">
-              Welcome to iOwnMyFuture.ai! Your subscription is now active and you have full access to all features.
-            </p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-background to-primary/10 py-12 px-4">
+      {/* Celebration Animation */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-10 left-10 w-4 h-4 bg-accent rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+        <div className="absolute top-20 right-20 w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.5s' }}></div>
+        <div className="absolute bottom-20 left-20 w-5 h-5 bg-accent rounded-full animate-bounce" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute bottom-10 right-10 w-4 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: '1.5s' }}></div>
+      </div>
 
-          {sessionId && (
-            <div className="mb-6 p-3 bg-gray-50 rounded-lg">
-              <p className="text-sm text-text-secondary">
-                Session ID: <span className="font-mono text-xs">{sessionId}</span>
-              </p>
+      <div className="container mx-auto max-w-4xl">
+        
+        {/* Success Header */}
+        <div className="text-center mb-12">
+          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-12 h-12 text-green-600" />
+          </div>
+          
+          <h1 className="text-4xl md:text-5xl font-bold text-text-primary mb-4">
+            🎉 Welcome to Your Transformation Journey!
+          </h1>
+          
+          <p className="text-xl text-text-secondary mb-6 max-w-2xl mx-auto">
+            Your subscription is active and you're ready to start manifesting your dreams with 
+            AI-powered tools and insights.
+          </p>
+
+          {sessionDetails && (
+            <div className="card max-w-2xl mx-auto mb-8">
+              <h3 className="font-semibold text-text-primary mb-4">Payment Confirmation</h3>
+              <div className="grid md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-text-secondary">Plan:</span>
+                  <span className="text-text-primary font-medium ml-2">{sessionDetails.plan}</span>
+                </div>
+                <div>
+                  <span className="text-text-secondary">Amount:</span>
+                  <span className="text-text-primary font-medium ml-2">${sessionDetails.amount}</span>
+                </div>
+                <div>
+                  <span className="text-text-secondary">Session ID:</span>
+                  <span className="text-text-primary font-mono text-xs ml-2">{sessionDetails.sessionId.slice(0, 20)}...</span>
+                </div>
+                <div>
+                  <span className="text-text-secondary">Billed to:</span>
+                  <span className="text-text-primary font-medium ml-2">{sessionDetails.email}</span>
+                </div>
+              </div>
             </div>
           )}
+        </div>
 
-          <div className="space-y-4">
-            <Button
-              onClick={() => navigate('/dashboard')}
-              className="w-full"
-            >
-              Go to Dashboard
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
+        {/* What You Get */}
+        <div className="card mb-12">
+          <div className="flex items-center mb-6">
+            <Gift className="w-6 h-6 text-accent mr-3" />
+            <h2 className="text-2xl font-bold text-text-primary">What You Get With Your Subscription</h2>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            {benefits.map((benefit, index) => (
+              <div key={index} className="flex items-center">
+                <CheckCircle className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                <span className="text-text-secondary">{benefit}</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
+        {/* Next Steps */}
+        <div className="card mb-12">
+          <div className="flex items-center mb-6">
+            <Sparkles className="w-6 h-6 text-accent mr-3" />
+            <h2 className="text-2xl font-bold text-text-primary">Your Next Steps</h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {nextSteps.map((step, index) => (
+              <div key={index} className="relative group">
+                <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-xl p-6 border border-gray-100 hover:shadow-md transition-all cursor-pointer"
+                     onClick={() => navigate(step.path)}>
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
+                    <div className="text-accent">{step.icon}</div>
+                  </div>
+                  
+                  <h3 className="font-semibold text-text-primary mb-2">{step.title}</h3>
+                  <p className="text-sm text-text-secondary mb-4">{step.description}</p>
+                  
+                  <button className="text-accent font-medium text-sm flex items-center group-hover:text-accent/80">
+                    {step.action}
+                    <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </div>
+                
+                {/* Step Number */}
+                <div className="absolute -top-3 -left-3 w-8 h-8 bg-accent text-white rounded-full flex items-center justify-center text-sm font-bold">
+                  {index + 1}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="text-center space-y-4 mb-12">
+          <Button
+            onClick={() => navigate('/dashboard')}
+            className="bg-gradient-to-r from-primary to-accent text-white px-8 py-4 rounded-full font-semibold text-lg hover:shadow-lg hover:scale-105 transition-all inline-flex items-center"
+          >
+            <Sparkles className="w-5 h-5 mr-2" />
+            Go to Dashboard
+          </Button>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               variant="secondary"
               onClick={() => navigate('/moodboard')}
-              className="w-full"
+              className="inline-flex items-center justify-center"
             >
-              Create Your First Vision Board
+              <Target className="w-5 h-5 mr-2" />
+              Create Vision Board
+            </Button>
+            
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/journal')}
+              className="inline-flex items-center justify-center"
+            >
+              <BookOpen className="w-5 h-5 mr-2" />
+              Start Journaling
             </Button>
           </div>
+        </div>
 
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="font-semibold text-text-primary mb-2">What's Next?</h3>
-            <ul className="text-sm text-text-secondary space-y-1">
-              <li>• Set up your goals and preferences</li>
-              <li>• Create your first AI-powered vision board</li>
-              <li>• Start your daily journaling practice</li>
-              <li>• Track your progress with AI insights</li>
-            </ul>
+        {/* Support Info */}
+        <div className="card bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
+          <div className="flex items-center justify-center mb-4">
+            <Mail className="w-5 h-5 text-accent mr-2" />
+            <span className="font-medium text-text-primary">Need Help Getting Started?</span>
+          </div>
+          
+          <p className="text-text-secondary mb-4 text-center">
+            Our team is here to help you make the most of your subscription.
+          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center text-sm">
+            <span className="text-text-secondary">📧 support@iownmyfuture.ai</span>
+            <span className="text-text-secondary">💬 Live chat available 24/7</span>
+            <span className="text-text-secondary">📱 Download our mobile app</span>
           </div>
         </div>
       </div>

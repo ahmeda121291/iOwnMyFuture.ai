@@ -1,6 +1,11 @@
 import React from 'react'
 
-export default function Loader({ size = 'medium', className = '' }) {
+interface LoaderProps {
+  size?: 'small' | 'medium' | 'large'
+  className?: string
+}
+
+export default function Loader({ size = 'medium', className = '' }: LoaderProps) {
   const sizeClasses = {
     small: 'w-4 h-4',
     medium: 'w-8 h-8',

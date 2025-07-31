@@ -1,5 +1,13 @@
 import React from 'react'
 
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  children: React.ReactNode
+  variant?: 'primary' | 'secondary'
+  size?: 'small' | 'medium' | 'large'
+  loading?: boolean
+  className?: string
+}
+
 export default function Button({ 
   children, 
   variant = 'primary', 
@@ -9,7 +17,7 @@ export default function Button({
   loading = false,
   className = '',
   ...props 
-}) {
+}: ButtonProps) {
   const baseClasses = 'btn'
   const variantClasses = {
     primary: 'btn-primary',

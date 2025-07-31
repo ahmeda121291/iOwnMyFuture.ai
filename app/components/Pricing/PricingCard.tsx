@@ -7,9 +7,11 @@ import Button from '../Shared/Button';
 interface PricingCardProps {
   product: Product;
   isPopular?: boolean;
+  billingInfo?: string;
+  savings?: string;
 }
 
-export default function PricingCard({ product, isPopular = false }: PricingCardProps) {
+export default function PricingCard({ product, isPopular = false, billingInfo, savings }: PricingCardProps) {
   const [loading, setLoading] = useState(false);
 
   const handleSubscribe = async () => {
@@ -64,9 +66,15 @@ export default function PricingCard({ product, isPopular = false }: PricingCardP
         <div className="mb-4">
           <span className="text-4xl font-bold text-accent">{formatPrice(product.price)}</span>
           <span className="text-text-secondary ml-1">
-            {product.mode === 'subscription' ? '/month' : ' one-time'}
+            {billingInfo ? `/${billingInfo}` : (product.mode === 'subscription' ? '/month' : ' one-time')}
           </span>
         </div>
+
+        {savings && (
+          <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium inline-block mb-4">
+            {savings}
+          </div>
+        )}
       </div>
 
       <ul className="space-y-3 mb-8">

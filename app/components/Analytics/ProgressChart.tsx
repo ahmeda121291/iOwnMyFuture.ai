@@ -1,136 +1,137 @@
 import React from 'react';
-import { TrendingUp, Calendar, Target, BookOpen } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 
 interface ProgressChartProps {
   data: {
-    labels: string[];
-    journalEntries: number[];
-    moodboardUpdates: number[];
-    goalProgress: number[];
-  };
+    date: string;
+    journalEntries: number;
+    moodboardUpdates: number;
+    goalProgress: number;
+  }[];
 }
 
 export default function ProgressChart({ data }: ProgressChartProps) {
-  const maxValue = Math.max(
-    ...data.journalEntries,
-    ...data.moodboardUpdates,
-    ...data.goalProgress
-  );
-
-  const normalizeValue = (value: number) => (value / maxValue) * 100;
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
+          <p className="font-medium text-text-primary mb-2">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-sm" style={{ color: entry.color }}>
+              {`${entry.name}: ${entry.value}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold text-text-primary">Weekly Progress</h3>
+        <div>
+          <h3 className="text-lg font-semibold text-text-primary">Weekly Progress</h3>
+          <p className="text-sm text-text-secondary">Track your journey over time</p>
+        </div>
         <TrendingUp className="w-5 h-5 text-accent" />
       </div>
 
-      {/* Chart */}
-      <div className="relative h-48 mb-6">
-        <svg className="w-full h-full" viewBox="0 0 400 200">
-          {/* Grid lines */}
-          {[0, 25, 50, 75, 100].map((y) => (
-            <line
-              key={y}
-              x1="40"
-              y1={160 - (y * 1.2)}
-              x2="380"
-              y2={160 - (y * 1.2)}
-              stroke="#E5E7EB"
-              strokeWidth="1"
-              opacity="0.5"
+      <div className="h-80">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={data}
+            margin={{
+              top: 5,
+              right: 30,
+              left: 20,
+              bottom: 5,
+            }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+            <XAxis
+              dataKey="date"
+              stroke="#6B7280"
+              fontSize={12}
+              tickLine={false}
+              axisLine={false}
             />
-          ))}
-
-          {/* Journal Entries Line */}
-          <polyline
-            points={data.labels.map((_, index) => 
-              `${60 + index * 45},${160 - normalizeValue(data.journalEntries[index]) * 1.2}`
-            ).join(' ')}
-            fill="none"
-            stroke="#8A2BE2"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Moodboard Updates Line */}
-          <polyline
-            points={data.labels.map((_, index) => 
-              `${60 + index * 45},${160 - normalizeValue(data.moodboardUpdates[index]) * 1.2}`
-            ).join(' ')}
-            fill="none"
-            stroke="#C3B1E1"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Goal Progress Line */}
-          <polyline
-            points={data.labels.map((_, index) => 
-              `${60 + index * 45},${160 - normalizeValue(data.goalProgress[index]) * 1.2}`
-            ).join(' ')}
-            fill="none"
-            stroke="#16a34a"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Data Points */}
-          {data.labels.map((_, index) => (
-            <g key={index}>
-              <circle
-                cx={60 + index * 45}
-                cy={160 - normalizeValue(data.journalEntries[index]) * 1.2}
-                r="4"
-                fill="#8A2BE2"
-              />
-              <circle
-                cx={60 + index * 45}
-                cy={160 - normalizeValue(data.moodboardUpdates[index]) * 1.2}
-                r="4"
-                fill="#C3B1E1"
-              />
-              <circle
-                cx={60 + index * 45}
-                cy={160 - normalizeValue(data.goalProgress[index]) * 1.2}
-                r="4"
-                fill="#16a34a"
-              />
-            </g>
-          ))}
-
-          {/* X-axis labels */}
-          {data.labels.map((label, index) => (
-            <text
-              key={index}
-              x={60 + index * 45}
-              y={185}
-              textAnchor="middle"
-              className="text-xs fill-current text-text-secondary"
-            >
-              {label}
-            </text>
-          ))}
-        </svg>
+            <YAxis
+              stroke="#6B7280"
+              fontSize={12}
+              tickLine={false}
+              axisLine={false}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend
+              verticalAlign="top"
+              height={36}
+              iconType="line"
+              wrapperStyle={{
+                paddingBottom: '20px',
+                fontSize: '14px'
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="journalEntries"
+              stroke="#8A2BE2"
+              strokeWidth={3}
+              dot={{ fill: '#8A2BE2', strokeWidth: 2, r: 4 }}
+              activeDot={{ r: 6, stroke: '#8A2BE2', strokeWidth: 2 }}
+              name="Journal Entries"
+            />
+            <Line
+              type="monotone"
+              dataKey="moodboardUpdates"
+              stroke="#C3B1E1"
+              strokeWidth={3}
+              dot={{ fill: '#C3B1E1', strokeWidth: 2, r: 4 }}
+              activeDot={{ r: 6, stroke: '#C3B1E1', strokeWidth: 2 }}
+              name="Moodboard Updates"
+            />
+            <Line
+              type="monotone"
+              dataKey="goalProgress"
+              stroke="#16a34a"
+              strokeWidth={3}
+              dot={{ fill: '#16a34a', strokeWidth: 2, r: 4 }}
+              activeDot={{ r: 6, stroke: '#16a34a', strokeWidth: 2 }}
+              name="Goals Achieved"
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center justify-center space-x-6 text-sm">
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-accent rounded-full mr-2"></div>
-          <span className="text-text-secondary">Journal Entries</span>
+      {/* Summary Stats */}
+      <div className="mt-6 pt-4 border-t border-gray-200 grid grid-cols-3 gap-4 text-center">
+        <div>
+          <div className="text-2xl font-bold text-primary">
+            {data.reduce((sum, d) => sum + d.journalEntries, 0)}
+          </div>
+          <div className="text-sm text-text-secondary">Total Entries</div>
         </div>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-primary rounded-full mr-2"></div>
-          <span className="text-text-secondary">Vision Board Updates</span>
+        <div>
+          <div className="text-2xl font-bold text-accent">
+            {data.reduce((sum, d) => sum + d.moodboardUpdates, 0)}
+          </div>
+          <div className="text-sm text-text-secondary">Moodboard Updates</div>
         </div>
-        <div className="flex items-center">
-          <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-          <span className="text-text-secondary">Goal Progress</span>
+        <div>
+          <div className="text-2xl font-bold text-green-600">
+            {data.reduce((sum, d) => sum + d.goalProgress, 0)}
+          </div>
+          <div className="text-sm text-text-secondary">Goals Achieved</div>
         </div>
       </div>
     </div>
