@@ -11,6 +11,7 @@ import {
   Zap
 } from 'lucide-react';
 import { getUserSubscription } from '../../lib/supabase';
+import { getProductByPriceId } from '../../lib/stripeConfig';
 import Button from '../Shared/Button';
 import Modal from '../Shared/Modal';
 import Loader from '../Shared/Loader';
@@ -96,15 +97,17 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
   };
 
   const getPlanDetails = () => {
-    if (!subscription?.price_id) return { name: 'Unknown Plan', amount: 0, cycle: 'month' };
+    if (!subscription?.price_id) {
+      return { name: 'Unknown Plan', amount: 0, cycle: 'month' };
+    }
     
-    // Map price IDs to plan details (these should match your Stripe config)
-    const planMap: Record<string, { name: string; amount: number; cycle: string }> = {
-      'price_monthly': { name: 'Pro Monthly', amount: 18, cycle: 'month' },
-      'price_yearly': { name: 'Pro Annual', amount: 180, cycle: 'year' },
-    };
-
-    return planMap[subscription.price_id] || { name: 'Pro Plan', amount: 18, cycle: 'month' };
+    const product = getProductByPriceId(subscription.price_id);
+    if (!product) {
+      return { name: 'Unknown Plan', amount: 0, cycle: 'month' };
+    }
+    
+    const cycle = product.price === 180 ? 'year' : 'month';
+    return { name: product.name, amount: product.price, cycle };
   };
 
   if (loading) {
