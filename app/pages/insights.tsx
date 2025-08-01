@@ -82,13 +82,15 @@ export default function InsightsPage() {
       if (entriesError) throw entriesError;
       setJournalEntries(entries || []);
 
-      // Load moodboard updates (simulated for now)
-      // In a real app, you'd have a moodboard_updates table
-      const mockMoodboardUpdates = Array.from({ length: Math.floor(Math.random() * 10) + 5 }, (_, i) => ({
-        id: `mock-${i}`,
-        updated_at: new Date(Date.now() - Math.random() * daysBack * 24 * 60 * 60 * 1000).toISOString()
-      }));
-      setMoodboards(mockMoodboardUpdates);
+      // Load real moodboard updates from Supabase
+      const { data: updates, error: updatesError } = await supabase
+        .from('moodboard_updates')
+        .select('id, updated_at')
+        .eq('user_id', userId)
+        .gte('updated_at', cutoffDate.toISOString());
+        
+      if (updatesError) throw updatesError;
+      setMoodboards(updates || []);
 
       // Generate AI insights if we have entries
       if (entries && entries.length > 0) {
