@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus } from 'lucide-react';
-import { getCurrentUser, getUserSubscription } from '../lib/supabase';
+import { getCurrentUser, getUserSubscription, supabase } from '../lib/supabase';
 import { getProductByPriceId } from '../lib/stripeConfig';
 import Button from '../components/Shared/Button';
 import Loader from '../components/Shared/Loader';
@@ -10,6 +10,9 @@ import SubscriptionStatus from '../components/Subscription/SubscriptionStatus';
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [subscription, setSubscription] = useState<any>(null);
+  const [boardCount, setBoardCount] = useState(0);
+  const [entryCount, setEntryCount] = useState(0);
+  const [daysActive, setDaysActive] = useState(0);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -28,6 +31,18 @@ export default function DashboardPage() {
 
       const subscriptionData = await getUserSubscription();
       setSubscription(subscriptionData);
+
+      // Fetch real metrics from Supabase
+      const { data: boards } = await supabase.from('moodboards').select('id').eq('user_id', userData.id);
+      const { data: journalEntries } = await supabase.from('journal_entries').select('id').eq('user_id', userData.id);
+
+      setBoardCount(boards?.length || 0);
+      setEntryCount(journalEntries?.length || 0);
+      
+      // Calculate days active since account creation
+      const daysActiveSinceSignup = Math.ceil((Date.now() - new Date(userData.created_at).getTime()) / (1000 * 60 * 60 * 24));
+      setDaysActive(daysActiveSinceSignup);
+      
     } catch (error) {
       console.error('Error loading user data:', error);
       navigate('/auth');
@@ -161,15 +176,15 @@ export default function DashboardPage() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-text-secondary">Vision Boards</span>
-                  <span className="font-semibold text-text-primary">0</span>
+                  <span className="font-semibold text-text-primary">{boardCount}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-text-secondary">Journal Entries</span>
-                  <span className="font-semibold text-text-primary">0</span>
+                  <span className="font-semibold text-text-primary">{entryCount}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-text-secondary">Days Active</span>
-                  <span className="font-semibold text-text-primary">1</span>
+                  <span className="font-semibold text-text-primary">{daysActive}</span>
                 </div>
               </div>
             </div>
