@@ -87,8 +87,11 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
   };
 
   const handleManageSubscription = () => {
-    // In a real app, this would redirect to Stripe customer portal
-    window.open('https://billing.stripe.com/p/login/test_00000000000000000', '_blank');
+    // TODO: Implement Stripe Customer Portal session creation
+    // This should create a customer portal session and redirect to it
+    console.log('Manage subscription clicked - implement customer portal');
+    // For now, redirect to pricing page
+    window.location.href = '/pricing';
   };
 
   const handleUpgrade = () => {
