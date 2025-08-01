@@ -113,6 +113,14 @@ export default function ProfilePage() {
         ? Math.round((entries || []).reduce((sum, entry) => sum + entry.content.split(' ').length, 0) / (entries || []).length)
         : 0;
 
+      // Fetch real vision board updates count
+      const { data: updates } = await supabase.from('moodboard_updates').select('id').eq('user_id', user.id);
+      const visionBoardUpdates = updates?.length || 0;
+
+      // Fetch real goals achieved count
+      const { data: completedGoals } = await supabase.from('goals').select('id').eq('user_id', user.id).eq('completed', true);
+      const goalsAchieved = completedGoals?.length || 0;
+
       const stats: UserStats = {
         memberSince: new Date(user?.created_at).toLocaleDateString('en-US', { 
           month: 'long', 
@@ -120,8 +128,8 @@ export default function ProfilePage() {
         }),
         totalEntries: (entries || []).length,
         entriesThisMonth,
-        visionBoardUpdates: Math.floor(Math.random() * 5) + 1, // Mock data - would come from moodboard updates
-        goalsAchieved: Math.floor(Math.random() * 3) + 1, // Mock data - would come from goals table
+        visionBoardUpdates,
+        goalsAchieved,
         currentStreak,
         avgWordsPerEntry: avgWords
       };
