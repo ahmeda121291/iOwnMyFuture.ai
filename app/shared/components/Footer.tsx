@@ -26,9 +26,11 @@ export default function Footer() {
           {/* Brand Section */}
           <div className="md:col-span-2">
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent shadow-lg"></div>
-              <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                iOwnMyFuture.ai
+              <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary-600 to-accent-600 shadow-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">iO</span>
+              </div>
+              <span className="text-xl font-bold text-gray-900">
+                iOwnMyFuture<span className="text-accent-600">.ai</span>
               </span>
             </div>
             <p className="text-text-secondary mb-6 leading-relaxed max-w-md">

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { type UserProfile } from '../core/types/database';
+import { type UserProfile } from '../types/database';
 
 // Pull the values from your build environment (Vite prefixes client‑exposed variables with VITE_)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -17,54 +17,117 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Auth helpers
 export const getCurrentUser = async (): Promise<UserProfile | null> => {
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error) {throw error;}
-  
-  if (!user) {return null;}
-  
-  // Map Supabase User to our UserProfile type
-  return {
-    id: user.id,
-    email: user.email || '',
-    full_name: user.user_metadata?.full_name,
-    is_admin: user.user_metadata?.is_admin || false,
-    created_at: user.created_at || new Date().toISOString(),
-    user_metadata: user.user_metadata
-  };
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error) {
+      console.warn('Error getting current user:', error.message);
+      return null;
+    }
+    
+    if (!user) {
+      return null;
+    }
+    
+    // Map Supabase User to our UserProfile type
+    return {
+      id: user.id,
+      email: user.email || '',
+      full_name: user.user_metadata?.full_name,
+      is_admin: user.user_metadata?.is_admin || false,
+      created_at: user.created_at || new Date().toISOString(),
+      user_metadata: user.user_metadata
+    };
+  } catch (error) {
+    console.warn('Unexpected error in getCurrentUser:', error);
+    return null;
+  }
+};
+
+// Get session helper
+export const getSession = async () => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.warn('Error getting session:', error.message);
+      return null;
+    }
+    return session;
+  } catch (error) {
+    console.warn('Unexpected error in getSession:', error);
+    return null;
+  }
 };
 
 export const signIn = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {throw error;}
-  return data;
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      throw error;
+    }
+    return data;
+  } catch (error) {
+    console.error('Sign in error:', error);
+    throw error;
+  }
 };
 
 export const signUp = async (email: string, password: string) => {
-  const { data, error } = await supabase.auth.signUp({ email, password });
-  if (error) {throw error;}
-  return data;
+  try {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      throw error;
+    }
+    return data;
+  } catch (error) {
+    console.error('Sign up error:', error);
+    throw error;
+  }
 };
 
 export const signOut = async () => {
-  const { error } = await supabase.auth.signOut();
-  if (error) {throw error;}
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error('Sign out error:', error);
+    throw error;
+  }
 };
 
-// Stripe helpers (unchanged)
+// Stripe helpers
 export const getUserSubscription = async () => {
-  const { data, error } = await supabase
-    .from('stripe_user_subscriptions')
-    .select('*')
-    .maybeSingle();
-  if (error) {throw error;}
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from('stripe_user_subscriptions')
+      .select('*')
+      .maybeSingle();
+    if (error) {
+      console.warn('Error getting user subscription:', error);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.warn('Unexpected error in getUserSubscription:', error);
+    return null;
+  }
 };
 
 export const getUserOrders = async () => {
-  const { data, error } = await supabase
-    .from('stripe_user_orders')
-    .select('*')
-    .order('order_date', { ascending: false });
-  if (error) {throw error;}
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from('stripe_user_orders')
+      .select('*')
+      .order('order_date', { ascending: false });
+    if (error) {
+      console.warn('Error getting user orders:', error);
+      return [];
+    }
+    return data || [];
+  } catch (error) {
+    console.warn('Unexpected error in getUserOrders:', error);
+    return [];
+  }
 };

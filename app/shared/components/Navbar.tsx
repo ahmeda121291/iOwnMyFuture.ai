@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { LogOut, Menu, X, Home, DollarSign, Shield } from 'lucide-react'
-import { supabase, getCurrentUser, signOut } from '../../core/api/supabase'
+import { supabase, getCurrentUser, signOut, getSession } from '../../core/api/supabase'
 import { checkIsAdmin } from '../../core/api/admin'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { type User } from '../../core/types'
@@ -14,26 +14,44 @@ export default function Navbar() {
 
   useEffect(() => {
     // Get initial user
-    getCurrentUser().then(user => {
-      setUser(user)
-      if (user) {
-        checkIsAdmin(user.id).then(setIsAdmin)
+    const initializeUser = async () => {
+      try {
+        const session = await getSession();
+        if (session) {
+          const userData = await getCurrentUser();
+          if (userData) {
+            setUser(userData);
+            const adminStatus = await checkIsAdmin(userData.id);
+            setIsAdmin(adminStatus);
+          }
+        } else {
+          setUser(null);
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error('Error initializing user in navbar:', error);
+        setUser(null);
+        setIsAdmin(false);
       }
-    }).catch(() => setUser(null))
+    };
+
+    initializeUser();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const userData = await getCurrentUser();
         setUser(userData);
-        checkIsAdmin(session.user.id).then(setIsAdmin);
+        if (userData) {
+          checkIsAdmin(userData.id).then(setIsAdmin).catch(() => setIsAdmin(false));
+        }
       } else {
         setUser(null);
         setIsAdmin(false);
       }
-    })
+    });
 
-    return () => subscription.unsubscribe()
+    return () => subscription.unsubscribe();
   }, [])
 
   const handleSignOut = async () => {
@@ -55,9 +73,11 @@ export default function Navbar() {
           className="flex items-center space-x-3 cursor-pointer group"
           onClick={() => navigate('/')}
         >
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary to-accent shadow-lg group-hover:shadow-xl transition-shadow"></div>
-          <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            iOwnMyFuture.ai
+          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary-600 to-accent-600 shadow-lg group-hover:shadow-xl transition-shadow flex items-center justify-center">
+            <span className="text-white font-bold text-lg">iO</span>
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">
+            iOwnMyFuture<span className="text-accent-600">.ai</span>
           </h1>
         </div>
 

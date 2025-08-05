@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { getCurrentUser } from './core/api/supabase';
+import { supabase, getSession } from './core/api/supabase';
 
 // Components
 import ErrorBoundary from './shared/components/ErrorBoundary';
@@ -25,20 +25,38 @@ import ShareSnapshot from './pages/ShareSnapshot';
 
 function AppRouter() {
   const [loading, setLoading] = useState(true);
+  const [sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    // Check for existing session on mount
+    const initializeAuth = async () => {
+      try {
+        // Get initial session
+        const session = await getSession();
+        setSessionChecked(true);
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const checkAuth = async () => {
-    try {
-      await getCurrentUser();
-    } catch {
-      // User not authenticated
-    } finally {
-      setLoading(false);
-    }
-  };
+    initializeAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Auth state changes are handled by individual components
+      // This listener ensures we're aware of auth state changes globally
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        // The app will naturally re-render due to auth state change
+        setSessionChecked(true);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   if (loading) {
     return (
