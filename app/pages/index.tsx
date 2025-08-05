@@ -20,6 +20,8 @@ import {
 import { motion } from 'framer-motion';
 import { Link as ScrollLink, animateScroll as scroll } from 'react-scroll';
 import Button from '../shared/components/Button';
+import { getCurrentUser } from '../core/api/supabase';
+import { type User } from '../core/types';
 
 interface Feature {
   icon: React.ReactNode;
@@ -46,9 +48,17 @@ interface Testimonial {
 export default function LandingPage() {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState<boolean>(false);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     setIsVisible(true);
+    
+    // Check authentication status
+    getCurrentUser().then(userData => {
+      setUser(userData);
+    }).catch(() => {
+      setUser(null);
+    });
     
     // Update page meta tags
     document.title = 'iOwnMyFuture.ai - Unlock Your Future with AI-Powered Vision Boards';
@@ -62,6 +72,15 @@ export default function LandingPage() {
       document.head.appendChild(meta);
     }
   }, []);
+
+  // Smart CTA handler - routes based on auth status
+  const handleStartJournaling = () => {
+    if (user) {
+      navigate('/journal');
+    } else {
+      navigate('/auth');
+    }
+  };
 
   const features: Feature[] = [
     {
@@ -200,11 +219,11 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16">
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
-                  onClick={() => navigate('/auth')}
+                  onClick={handleStartJournaling}
                   className="group relative overflow-hidden bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-accent-500/25 transform transition-all duration-300"
                 >
                   <span className="relative z-10 flex items-center">
-                    Start Journaling Now
+                    {user ? 'Go to Journal' : 'Start Journaling Now'}
                     <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                   </span>
                   <div className="absolute inset-0 bg-gradient-to-r from-accent-500 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -331,10 +350,10 @@ export default function LandingPage() {
             className="text-center mt-16"
           >
             <Button
-              onClick={() => navigate('/auth')}
+              onClick={handleStartJournaling}
               className="bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
             >
-              Try It Free Today
+              {user ? 'Continue Journaling' : 'Try It Free Today'}
               <ArrowRight className="inline-block w-5 h-5 ml-2" />
             </Button>
           </motion.div>
@@ -584,10 +603,10 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
-                onClick={() => navigate('/auth')}
+                onClick={handleStartJournaling}
                 className="bg-white text-gray-900 hover:bg-gray-100 px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-white/25 transform transition-all duration-300"
               >
-                Begin Your Transformation
+                {user ? 'Continue Your Journey' : 'Begin Your Transformation'}
               </Button>
             </motion.div>
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>

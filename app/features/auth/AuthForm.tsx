@@ -145,7 +145,6 @@ export default function AuthForm({ mode, onSuccess, onModeChange }: AuthFormProp
             className="w-full rounded-full py-4 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white font-semibold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
             loading={loading}
             disabled={loading}
-            onClick={() => {}}
           >
             {mode === 'login' ? 'Sign In' : 'Create Account'}
           </Button>

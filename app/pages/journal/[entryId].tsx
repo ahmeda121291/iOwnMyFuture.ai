@@ -211,15 +211,15 @@ export default function JournalEntryPage() {
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            
+            {/* TODO: Implement share functionality
             <Button
               variant="secondary"
-              onClick={() => alert('Share functionality coming soon!')}
+              onClick={handleShare}
             >
               <Share className="w-4 h-4 mr-2" />
               Share
             </Button>
-            
+            */}
             <Button
               variant="secondary"
               onClick={() => setEditing(true)}

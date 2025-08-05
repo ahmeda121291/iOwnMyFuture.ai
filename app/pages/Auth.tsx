@@ -9,14 +9,11 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    checkUser();
-  }, [checkUser]);
-
   const checkUser = useCallback(async () => {
     try {
       const user = await getCurrentUser();
       if (user) {
+        // If already logged in, redirect to dashboard
         navigate('/dashboard');
       }
     } catch (_error) {
@@ -25,6 +22,10 @@ export default function AuthPage() {
       setLoading(false);
     }
   }, [navigate]);
+
+  useEffect(() => {
+    checkUser();
+  }, [checkUser]);
 
   const handleAuthSuccess = () => {
     navigate('/dashboard');

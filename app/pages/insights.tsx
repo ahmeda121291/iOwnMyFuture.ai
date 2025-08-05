@@ -129,8 +129,9 @@ export default function InsightsPage() {
   const recommendations = generateRecommendations(journalEntries, metrics);
 
   const exportReport = () => {
-    // Stub for export functionality
-    alert('Export feature coming soon! Your insights will be available as PDF and CSV.');
+    // TODO: Implement export functionality for PDF and CSV
+    // For now, showing a toast would be better than alert
+    console.info('Export feature coming soon');
   };
 
   if (loading) {
@@ -172,10 +173,12 @@ export default function InsightsPage() {
               ))}
             </div>
             
+            {/* TODO: Implement export functionality
             <Button variant="secondary" onClick={exportReport}>
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
+            */}
           </div>
         </div>
 
