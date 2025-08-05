@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { getCurrentUser } from './lib/supabase';
+import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { getCurrentUser } from './core/api/supabase';
 
 // Components
-import ErrorBoundary from './components/Shared/ErrorBoundary';
-import PrivateRoute from './components/Shared/PrivateRoute';
-import AdminRoute from './components/Shared/AdminRoute';
-import AppLayout from './components/Shared/AppLayout';
-import Loader from './components/Shared/Loader';
+import ErrorBoundary from './shared/components/ErrorBoundary';
+import PrivateRoute from './shared/components/PrivateRoute';
+import AdminRoute from './shared/components/AdminRoute';
+import AppLayout from './shared/components/AppLayout';
+import Loader from './shared/components/Loader';
 
 // Pages
 import LandingPage from './pages/index';
@@ -21,9 +21,9 @@ import MoodboardPage from './pages/Moodboard';
 import InsightsPage from './pages/insights';
 import ProfilePage from './pages/Profile';
 import AdminPage from './pages/Admin';
+import ShareSnapshot from './pages/ShareSnapshot';
 
 function AppRouter() {
-  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,10 +32,9 @@ function AppRouter() {
 
   const checkAuth = async () => {
     try {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-    } catch (error) {
-      setUser(null);
+      await getCurrentUser();
+    } catch {
+      // User not authenticated
     } finally {
       setLoading(false);
     }
@@ -75,6 +74,9 @@ function AppRouter() {
 
             {/* Auth Route (no layout) */}
             <Route path="/auth" element={<AuthPage />} />
+            
+            {/* Public Share Route */}
+            <Route path="/share/:id" element={<ShareSnapshot />} />
 
             {/* Protected Routes */}
             <Route path="/dashboard" element={

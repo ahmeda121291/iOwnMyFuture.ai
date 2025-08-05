@@ -73,14 +73,14 @@ Deno.serve(async (req: Request) => {
       .from('user_profiles')
       .select('*', { count: 'exact', head: true });
 
-    if (usersError) throw usersError;
+    if (usersError) {throw usersError;}
 
     // Fetch journal entries count
     const { count: totalEntries, error: entriesError } = await supabase
       .from('journal_entries')
       .select('*', { count: 'exact', head: true });
 
-    if (entriesError) throw entriesError;
+    if (entriesError) {throw entriesError;}
 
     // Fetch active and trial subscriptions
     const { data: subscriptions, error: subsError } = await supabase
@@ -88,7 +88,7 @@ Deno.serve(async (req: Request) => {
       .select('subscription_status')
       .in('subscription_status', ['active', 'trialing']);
 
-    if (subsError) throw subsError;
+    if (subsError) {throw subsError;}
 
     const activeSubscriptions = subscriptions?.filter(s => s.subscription_status === 'active').length || 0;
     const trialSubscriptions = subscriptions?.filter(s => s.subscription_status === 'trialing').length || 0;
@@ -123,7 +123,7 @@ Deno.serve(async (req: Request) => {
       .select('*', { count: 'exact', head: true })
       .not('ai_summary', 'is', null);
 
-    if (aiError) throw aiError;
+    if (aiError) {throw aiError;}
 
     // Estimate tokens (rough approximation: ~150 tokens per summary)
     const aiTokensUsed = (aiSummaries || 0) * 150;
@@ -138,7 +138,7 @@ Deno.serve(async (req: Request) => {
       .select('*', { count: 'exact', head: true })
       .gte('created_at', startOfToday.toISOString());
 
-    if (newUsersError) throw newUsersError;
+    if (newUsersError) {throw newUsersError;}
 
     // Entries created today
     const { count: entriesCreatedToday, error: todayEntriesError } = await supabase
@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
       .select('*', { count: 'exact', head: true })
       .gte('created_at', startOfToday.toISOString());
 
-    if (todayEntriesError) throw todayEntriesError;
+    if (todayEntriesError) {throw todayEntriesError;}
 
     // Revenue today from Stripe
     let revenueToday = 0;

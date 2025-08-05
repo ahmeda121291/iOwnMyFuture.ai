@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import { authenticateAndValidateCSRF, handleCORS } from '../_shared/csrf-middleware.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -154,7 +155,7 @@ Deno.serve(async (req: Request) => {
       const text = (entry.content + ' ' + (entry.ai_summary || '')).toLowerCase();
       const detectedMoods: string[] = [];
       let entryPositivity = 0;
-      let moodScores: Record<string, number> = {};
+      const moodScores: Record<string, number> = {};
 
       // Calculate mood scores for this entry
       for (const [mood, keywords] of Object.entries(moodKeywords)) {

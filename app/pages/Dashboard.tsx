@@ -1,28 +1,59 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, BookOpen, TrendingUp, Crown, Plus } from 'lucide-react';
-import { getCurrentUser, getUserSubscription, supabase } from '../lib/supabase';
-import Button from '../components/Shared/Button';
-import Loader from '../components/Shared/Loader';
-import SubscriptionStatus from '../components/Subscription/SubscriptionStatus';
-import MoodAnalyticsPanel from '../components/Analytics/MoodAnalyticsPanel';
-import FirstTimeChecklist from '../components/Onboarding/FirstTimeChecklist';
+import { Target, BookOpen, TrendingUp, Crown, Plus, AlertCircle } from 'lucide-react';
+import { getCurrentUser, getUserSubscription, supabase } from '../core/api/supabase';
+import Button from '../shared/components/Button';
+import Loader from '../shared/components/Loader';
+import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
+import MoodAnalyticsPanelLazy from '../features/insights/MoodAnalyticsPanelLazy';
+import FirstTimeChecklist from '../features/Onboarding/FirstTimeChecklist';
+
+// Types
+interface User {
+  id: string;
+  email?: string;
+  created_at: string;
+}
+
+interface Subscription {
+  subscription_status: string;
+}
+
+interface Metrics {
+  boardCount: number;
+  entryCount: number;
+  daysActive: number;
+}
+
+interface QuickAction {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  action: () => void;
+  color: string;
+}
+
+// Constants
+const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<{ id: string; email?: string; created_at: string } | null>(null);
-  const [subscription, setSubscription] = useState<{ subscription_status: string } | null>(null);
-  const [boardCount, setBoardCount] = useState(0);
-  const [entryCount, setEntryCount] = useState(0);
-  const [daysActive, setDaysActive] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // Custom hooks and state at top
   const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [metrics, setMetrics] = useState<Metrics>({
+    boardCount: 0,
+    entryCount: 0,
+    daysActive: 0
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
+  // Event handlers
+  const loadUserData = useCallback(async () => {
     try {
+      setError(null);
+      
       const userData = await getCurrentUser();
       if (!userData) {
         navigate('/auth');
@@ -34,35 +65,53 @@ export default function DashboardPage() {
       setSubscription(subscriptionData);
 
       // Fetch real metrics from Supabase
-      const { data: boards } = await supabase.from('moodboards').select('id').eq('user_id', userData.id);
-      const { data: journalEntries } = await supabase.from('journal_entries').select('id').eq('user_id', userData.id);
+      const [boardsResponse, entriesResponse] = await Promise.all([
+        supabase.from('moodboards').select('id').eq('user_id', userData.id),
+        supabase.from('journal_entries').select('id').eq('user_id', userData.id)
+      ]);
 
-      setBoardCount(boards?.length || 0);
-      setEntryCount(journalEntries?.length || 0);
+      const boardCount = boardsResponse.data?.length || 0;
+      const entryCount = entriesResponse.data?.length || 0;
       
       // Calculate days active since account creation
-      const daysActiveSinceSignup = Math.ceil((Date.now() - new Date(userData.created_at).getTime()) / (1000 * 60 * 60 * 24));
-      setDaysActive(daysActiveSinceSignup);
+      const daysActive = Math.ceil(
+        (Date.now() - new Date(userData.created_at).getTime()) / MILLISECONDS_PER_DAY
+      );
+      
+      setMetrics({
+        boardCount,
+        entryCount,
+        daysActive
+      });
       
     } catch (error) {
       console.error('Error loading user data:', error);
-      navigate('/auth');
+      setError(error instanceof Error ? error.message : 'Failed to load user data');
+      
+      // If auth error, redirect to auth page
+      if (error instanceof Error && error.message.includes('auth')) {
+        navigate('/auth');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader size="large" />
-      </div>
-    );
-  }
+  // Effect hooks
+  useEffect(() => {
+    loadUserData();
+  }, [loadUserData]);
 
-  const hasActiveSubscription = subscription && ['active', 'trialing'].includes(subscription.subscription_status);
+  // Computed values
+  const userName = useMemo(() => {
+    return user?.email?.split('@')[0] || 'there';
+  }, [user?.email]);
 
-  const quickActions = [
+  const hasActiveSubscription = useMemo(() => {
+    return subscription && ['active', 'trialing'].includes(subscription.subscription_status);
+  }, [subscription]);
+
+  const quickActions = useMemo((): QuickAction[] => [
     {
       icon: <Target className="w-6 h-6" />,
       title: 'Create Vision Board',
@@ -84,20 +133,35 @@ export default function DashboardPage() {
       action: () => navigate('/insights'),
       color: 'bg-green-100 text-green-600'
     }
-  ];
+  ], [navigate]);
 
+  const handleUpgradeClick = useCallback(() => {
+    navigate('/pricing');
+  }, [navigate]);
+
+  const handleCreateVisionBoard = useCallback(() => {
+    navigate('/moodboard');
+  }, [navigate]);
+
+  // Early returns for loading/error states
+  if (loading) {
+    return <LoadingState />;
+  }
+
+  if (error) {
+    return <ErrorState error={error} onRetry={loadUserData} />;
+  }
+
+  if (!user) {
+    return <LoadingState />;
+  }
+
+  // Main JSX render
   return (
     <div className="min-h-screen bg-background pt-20">
       <div className="container mx-auto px-4 py-8">
         {/* Welcome Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-text-primary mb-2">
-            Welcome back, {user?.email?.split('@')[0]}!
-          </h1>
-          <p className="text-text-secondary">
-            Ready to continue your transformation journey?
-          </p>
-        </div>
+        <WelcomeHeader userName={userName} />
 
         {/* First Time Checklist */}
         <FirstTimeChecklist />
@@ -107,68 +171,20 @@ export default function DashboardPage() {
           <div className="lg:col-span-2 space-y-8">
             {/* Subscription Status Alert */}
             {!hasActiveSubscription && (
-              <div className="card bg-gradient-to-r from-accent/10 to-primary/10 border border-accent/20">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <Crown className="w-8 h-8 text-accent mr-4" />
-                    <div>
-                      <h3 className="text-lg font-semibold text-text-primary">
-                        Unlock Your Full Potential
-                      </h3>
-                      <p className="text-text-secondary">
-                        Subscribe to access all AI-powered features and transform your dreams into reality.
-                      </p>
-                    </div>
-                  </div>
-                  <Button onClick={() => navigate('/pricing')}>
-                    Upgrade Now
-                  </Button>
-                </div>
-              </div>
+              <UpgradePrompt onUpgrade={handleUpgradeClick} />
             )}
 
             {/* Quick Actions */}
-            <div>
-              <h2 className="text-xl font-semibold text-text-primary mb-4">Quick Actions</h2>
-              <div className="grid md:grid-cols-3 gap-4">
-                {quickActions.map((action, index) => (
-                  <div
-                    key={index}
-                    onClick={action.action}
-                    className="card cursor-pointer hover:scale-105 transition-transform"
-                  >
-                    <div className={`w-12 h-12 rounded-full ${action.color} flex items-center justify-center mb-4`}>
-                      {action.icon}
-                    </div>
-                    <h3 className="font-semibold text-text-primary mb-2">{action.title}</h3>
-                    <p className="text-sm text-text-secondary">{action.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <QuickActionsSection actions={quickActions} />
 
             {/* Mood Analytics */}
-            <MoodAnalyticsPanel />
+            <MoodAnalyticsPanelLazy />
 
             {/* Recent Activity */}
-            <div>
-              <h2 className="text-xl font-semibold text-text-primary mb-4">Recent Activity</h2>
-              <div className="card">
-                <div className="text-center py-8">
-                  <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-text-primary mb-2">
-                    Start Your Journey
-                  </h3>
-                  <p className="text-text-secondary mb-4">
-                    Create your first vision board or journal entry to begin tracking your progress.
-                  </p>
-                  <Button onClick={() => navigate('/moodboard')}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Vision Board
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <RecentActivitySection 
+              hasActivity={metrics.boardCount > 0 || metrics.entryCount > 0}
+              onCreateVisionBoard={handleCreateVisionBoard}
+            />
           </div>
 
           {/* Sidebar */}
@@ -177,35 +193,217 @@ export default function DashboardPage() {
             <SubscriptionStatus />
 
             {/* Progress Overview */}
-            <div className="card">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Progress Overview</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-text-secondary">Vision Boards</span>
-                  <span className="font-semibold text-text-primary">{boardCount}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-text-secondary">Journal Entries</span>
-                  <span className="font-semibold text-text-primary">{entryCount}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-text-secondary">Days Active</span>
-                  <span className="font-semibold text-text-primary">{daysActive}</span>
-                </div>
-              </div>
-            </div>
+            <ProgressOverview metrics={metrics} />
 
             {/* Tips & Motivation */}
-            <div className="card bg-gradient-to-br from-primary/10 to-accent/10">
-              <h3 className="text-lg font-semibold text-text-primary mb-3">💡 Daily Tip</h3>
-              <p className="text-text-secondary text-sm">
-                Start each day by reviewing your vision board. Visualization is a powerful tool that helps 
-                align your subconscious mind with your goals, making success more achievable.
-              </p>
-            </div>
+            <DailyTip />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Sub-components
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <Loader size="large" />
+    </div>
+  );
+}
+
+interface ErrorStateProps {
+  error: string;
+  onRetry: () => void;
+}
+
+function ErrorState({ error, onRetry }: ErrorStateProps) {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-text-primary mb-2">Error Loading Dashboard</h2>
+        <p className="text-text-secondary mb-4">{error}</p>
+        <Button onClick={onRetry}>Try Again</Button>
+      </div>
+    </div>
+  );
+}
+
+interface WelcomeHeaderProps {
+  userName: string;
+}
+
+function WelcomeHeader({ userName }: WelcomeHeaderProps) {
+  return (
+    <div className="mb-8">
+      <h1 className="text-3xl font-bold text-text-primary mb-2">
+        Welcome back, {userName}!
+      </h1>
+      <p className="text-text-secondary">
+        Ready to continue your transformation journey?
+      </p>
+    </div>
+  );
+}
+
+interface UpgradePromptProps {
+  onUpgrade: () => void;
+}
+
+function UpgradePrompt({ onUpgrade }: UpgradePromptProps) {
+  return (
+    <div className="card bg-gradient-to-r from-accent/10 to-primary/10 border border-accent/20">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <Crown className="w-8 h-8 text-accent mr-4" />
+          <div>
+            <h3 className="text-lg font-semibold text-text-primary">
+              Unlock Your Full Potential
+            </h3>
+            <p className="text-text-secondary">
+              Subscribe to access all AI-powered features and transform your dreams into reality.
+            </p>
+          </div>
+        </div>
+        <Button onClick={onUpgrade}>
+          Upgrade Now
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface QuickActionsSectionProps {
+  actions: QuickAction[];
+}
+
+function QuickActionsSection({ actions }: QuickActionsSectionProps) {
+  return (
+    <div>
+      <h2 className="text-xl font-semibold text-text-primary mb-4">Quick Actions</h2>
+      <div className="grid md:grid-cols-3 gap-4">
+        {actions.map((action, index) => (
+          <QuickActionCard key={index} action={action} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface QuickActionCardProps {
+  action: QuickAction;
+}
+
+function QuickActionCard({ action }: QuickActionCardProps) {
+  return (
+    <div
+      onClick={action.action}
+      className="card cursor-pointer hover:scale-105 transition-transform"
+    >
+      <div className={`w-12 h-12 rounded-full ${action.color} flex items-center justify-center mb-4`}>
+        {action.icon}
+      </div>
+      <h3 className="font-semibold text-text-primary mb-2">{action.title}</h3>
+      <p className="text-sm text-text-secondary">{action.description}</p>
+    </div>
+  );
+}
+
+interface RecentActivitySectionProps {
+  hasActivity: boolean;
+  onCreateVisionBoard: () => void;
+}
+
+function RecentActivitySection({ hasActivity, onCreateVisionBoard }: RecentActivitySectionProps) {
+  return (
+    <div>
+      <h2 className="text-xl font-semibold text-text-primary mb-4">Recent Activity</h2>
+      <div className="card">
+        {hasActivity ? (
+          <ActivityList />
+        ) : (
+          <EmptyActivityState onCreateVisionBoard={onCreateVisionBoard} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActivityList() {
+  // This would be populated with actual activity data
+  return (
+    <div className="text-center py-8">
+      <p className="text-text-secondary">Activity feed coming soon...</p>
+    </div>
+  );
+}
+
+interface EmptyActivityStateProps {
+  onCreateVisionBoard: () => void;
+}
+
+function EmptyActivityState({ onCreateVisionBoard }: EmptyActivityStateProps) {
+  return (
+    <div className="text-center py-8">
+      <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+      <h3 className="text-lg font-semibold text-text-primary mb-2">
+        Start Your Journey
+      </h3>
+      <p className="text-text-secondary mb-4">
+        Create your first vision board or journal entry to begin tracking your progress.
+      </p>
+      <Button onClick={onCreateVisionBoard}>
+        <Plus className="w-4 h-4 mr-2" />
+        Create Vision Board
+      </Button>
+    </div>
+  );
+}
+
+interface ProgressOverviewProps {
+  metrics: Metrics;
+}
+
+function ProgressOverview({ metrics }: ProgressOverviewProps) {
+  const progressItems = [
+    { label: 'Vision Boards', value: metrics.boardCount },
+    { label: 'Journal Entries', value: metrics.entryCount },
+    { label: 'Days Active', value: metrics.daysActive }
+  ];
+
+  return (
+    <div className="card">
+      <h3 className="text-lg font-semibold text-text-primary mb-4">Progress Overview</h3>
+      <div className="space-y-4">
+        {progressItems.map((item, index) => (
+          <div key={index} className="flex justify-between items-center">
+            <span className="text-text-secondary">{item.label}</span>
+            <span className="font-semibold text-text-primary">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DailyTip() {
+  const tips = [
+    "Start each day by reviewing your vision board. Visualization is a powerful tool that helps align your subconscious mind with your goals, making success more achievable.",
+    "Journal for just 5 minutes daily. Consistency beats perfection when building transformative habits.",
+    "Update your vision board monthly to reflect your evolving goals and celebrate achieved milestones.",
+    "Review your AI summaries weekly to identify patterns and track your personal growth journey."
+  ];
+
+  // Rotate tip based on day of year
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / MILLISECONDS_PER_DAY);
+  const currentTip = tips[dayOfYear % tips.length];
+
+  return (
+    <div className="card bg-gradient-to-br from-primary/10 to-accent/10">
+      <h3 className="text-lg font-semibold text-text-primary mb-3">💡 Daily Tip</h3>
+      <p className="text-text-secondary text-sm">{currentTip}</p>
     </div>
   );
 }

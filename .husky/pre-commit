@@ -1,0 +1,6 @@
+echo "🔍 Running pre-commit checks..."
+
+# Run lint-staged to check staged files
+npm run pre-commit
+
+echo "✅ Pre-commit checks passed!"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, 
@@ -10,24 +10,22 @@ import {
   Download,
   RefreshCw,
   Heart,
-  Zap,
-  Users,
-  Clock
+  Zap
 } from 'lucide-react';
-import { getCurrentUser, supabase } from '../lib/supabase';
-import { generateInsightReport } from '../lib/openai';
-import { JournalEntry } from '../types';
-import ProgressChart from '../components/Analytics/ProgressChart';
-import InsightCard from '../components/Analytics/InsightCard';
-import MoodTrendChart from '../components/Analytics/MoodTrendChart';
-import Button from '../components/Shared/Button';
-import Loader from '../components/Shared/Loader';
+import { getCurrentUser, supabase } from '../core/api/supabase';
+import { generateInsightReport } from '../core/api/openai';
+import { type User, type JournalEntry } from '../core/types';
+import ProgressChartLazy from '../features/insights/ProgressChartLazy';
+import InsightCard from '../features/insights/InsightCard';
+import MoodTrendChartLazy from '../features/insights/MoodTrendChartLazy';
+import Button from '../shared/components/Button';
+import Loader from '../shared/components/Loader';
 import {
   generateProgressData,
   generateMoodData,
   generateInsightMetrics,
   generateRecommendations
-} from '../utils/analytics';
+} from '../shared/utils/analytics';
 
 interface MoodboardUpdate {
   id: string;
@@ -35,7 +33,7 @@ interface MoodboardUpdate {
 }
 
 export default function InsightsPage() {
-  const [user, setUser] = useState<any>(null);
+  const [, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [aiReport, setAiReport] = useState<string>('');
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -44,11 +42,7 @@ export default function InsightsPage() {
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'quarter'>('month');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    initializePage();
-  }, [timeframe]);
-
-  const initializePage = async () => {
+  const initializePage = useCallback(async () => {
     try {
       const userData = await getCurrentUser();
       if (!userData) {
@@ -63,7 +57,11 @@ export default function InsightsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate, timeframe]);
+
+  useEffect(() => {
+    initializePage();
+  }, [initializePage]);
 
   const loadUserData = async (userId: string) => {
     try {
@@ -79,7 +77,7 @@ export default function InsightsPage() {
         .gte('entry_date', cutoffDate.toISOString().split('T')[0])
         .order('entry_date', { ascending: true });
 
-      if (entriesError) throw entriesError;
+      if (entriesError) {throw entriesError;}
       setJournalEntries(entries || []);
 
       // Load real moodboard updates from Supabase
@@ -89,7 +87,7 @@ export default function InsightsPage() {
         .eq('user_id', userId)
         .gte('updated_at', cutoffDate.toISOString());
         
-      if (updatesError) throw updatesError;
+      if (updatesError) {throw updatesError;}
       setMoodboards(updates || []);
 
       // Generate AI insights if we have entries
@@ -102,7 +100,7 @@ export default function InsightsPage() {
   };
 
   const generateAIInsights = async (entries: JournalEntry[]) => {
-    if (generatingReport) return;
+    if (generatingReport) {return;}
     
     setGeneratingReport(true);
     try {
@@ -162,7 +160,7 @@ export default function InsightsPage() {
               {['week', 'month', 'quarter'].map((period) => (
                 <button
                   key={period}
-                  onClick={() => setTimeframe(period as any)}
+                  onClick={() => setTimeframe(period as 'week' | 'month' | 'quarter')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     timeframe === period
                       ? 'bg-accent text-white'
@@ -263,8 +261,8 @@ export default function InsightsPage() {
 
         {/* Charts Grid */}
         <div className="grid lg:grid-cols-2 gap-8 mb-8">
-          <ProgressChart data={progressData} />
-          <MoodTrendChart data={moodData} chartType="area" />
+          <ProgressChartLazy data={progressData} />
+          <MoodTrendChartLazy data={moodData} chartType="area" />
         </div>
 
         {/* Weekly Summary & Recommendations */}

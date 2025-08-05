@@ -80,10 +80,17 @@ This is a **React + TypeScript** web application built with **Vite**, using the 
 - Subscription state is mirrored in local DB
 
 ### ⚙️ 5. Environment Variables
+
+**Frontend (Client-side):**
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
-- `VITE_OPENAI_API_KEY`
-- `VITE_STRIPE_PUBLISHABLE_KEY`
+
+**Backend/Edge Functions (Server-side):**
+- `OPENAI_API_KEY` - OpenAI API key (server-side only)
+- `STRIPE_SECRET_KEY` - Stripe secret key (server-side only)
+- `STRIPE_PUBLISHABLE_KEY` - Stripe publishable key (served securely via Edge Function)
+- `SERVICE_ROLE_KEY` - Supabase service role key
+- `PROJECT_URL` - Supabase project URL
 
 ---
 

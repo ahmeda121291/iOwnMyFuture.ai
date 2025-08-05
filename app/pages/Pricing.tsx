@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Check, Shield, Clock, ArrowRight, Sparkles, Target, Brain, BarChart3, HeadphonesIcon } from 'lucide-react';
-import { createCheckoutSession } from '../lib/stripeClient';
+import { createCheckoutSession } from '../core/api/stripeClient';
 
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');

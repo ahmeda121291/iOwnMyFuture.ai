@@ -13,9 +13,9 @@ import {
   Calendar,
   CreditCard
 } from 'lucide-react';
-import { supabase, getCurrentUser } from '../lib/supabase';
-import Loader from '../components/Shared/Loader';
-import Button from '../components/Shared/Button';
+import { supabase, getCurrentUser } from '../core/api/supabase';
+import Loader from '../shared/components/Loader';
+import Button from '../shared/components/Button';
 
 interface AdminStats {
   totalUsers: number;
@@ -111,7 +111,7 @@ export default function AdminPage() {
       setRefreshing(true);
       const { data, error: statsError } = await supabase.functions.invoke('admin-stats');
 
-      if (statsError) throw statsError;
+      if (statsError) {throw statsError;}
 
       setStats(data);
     } catch (err) {

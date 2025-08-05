@@ -2,24 +2,17 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
   Sparkles, 
-  Target, 
   BookOpen, 
-  TrendingUp, 
-  Star, 
-  Zap, 
   Check, 
-  Crown,
   ArrowRight,
   Brain,
-  Eye,
   BarChart3,
-  Compass,
   Play,
   ChevronDown,
   Shield,
   Clock
 } from 'lucide-react'
-import Button from '../components/Shared/Button'
+import Button from '../shared/components/Button'
 
 interface Feature {
   icon: React.ReactNode

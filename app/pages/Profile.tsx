@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  User, 
+  User as UserIcon, 
   Settings, 
   Link as LinkIcon, 
   LogOut, 
@@ -17,13 +17,14 @@ import {
   Zap,
   Check
 } from 'lucide-react';
-import { getCurrentUser, signOut, supabase } from '../lib/supabase';
-import ProfileHeader from '../components/Profile/ProfileHeader';
-import SocialConnections from '../components/Profile/SocialConnections';
-import AccountSettings from '../components/Profile/AccountSettings';
-import SubscriptionStatus from '../components/Subscription/SubscriptionStatus';
-import Button from '../components/Shared/Button';
-import Loader from '../components/Shared/Loader';
+import { getCurrentUser, signOut, supabase } from '../core/api/supabase';
+import { type User, type JournalEntry } from '../core/types';
+import ProfileHeader from '../features/Profile/ProfileHeader';
+import SocialConnections from '../features/Profile/SocialConnections';
+import AccountSettings from '../features/Profile/AccountSettings';
+import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
+import Button from '../shared/components/Button';
+import Loader from '../shared/components/Loader';
 
 interface UserStats {
   memberSince: string;
@@ -56,20 +57,15 @@ interface ActivityItem {
 }
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings' | 'connections'>('overview');
-  const [journalEntries, setJournalEntries] = useState<any[]>([]);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    initializePage();
-  }, []);
-
-  const initializePage = async () => {
+  const initializePage = useCallback(async () => {
     try {
       const userData = await getCurrentUser();
       if (!userData) {
@@ -84,7 +80,11 @@ export default function ProfilePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    initializePage();
+  }, [initializePage]);
 
   const loadUserData = async (userId: string) => {
     try {
@@ -95,8 +95,7 @@ export default function ProfilePage() {
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setJournalEntries(entries || []);
+      if (error) {throw error;}
 
       // Calculate user statistics
       const now = new Date();
@@ -114,15 +113,15 @@ export default function ProfilePage() {
         : 0;
 
       // Fetch real vision board updates count
-      const { data: updates } = await supabase.from('moodboard_updates').select('id').eq('user_id', user.id);
+      const { data: updates } = await supabase.from('moodboard_updates').select('id').eq('user_id', user?.id);
       const visionBoardUpdates = updates?.length || 0;
 
       // Fetch real goals achieved count
-      const { data: completedGoals } = await supabase.from('goals').select('id').eq('user_id', user.id).eq('completed', true);
+      const { data: completedGoals } = await supabase.from('goals').select('id').eq('user_id', user?.id).eq('completed', true);
       const goalsAchieved = completedGoals?.length || 0;
 
       const stats: UserStats = {
-        memberSince: new Date(user?.created_at).toLocaleDateString('en-US', { 
+        memberSince: new Date(user?.created_at || new Date()).toLocaleDateString('en-US', { 
           month: 'long', 
           year: 'numeric' 
         }),
@@ -149,15 +148,15 @@ export default function ProfilePage() {
     }
   };
 
-  const calculateStreak = (entries: any[]): number => {
-    if (entries.length === 0) return 0;
+  const calculateStreak = (entries: JournalEntry[]): number => {
+    if (entries.length === 0) {return 0;}
     
     const dates = [...new Set(entries.map(entry => 
       entry.entry_date || entry.created_at.split('T')[0]
     ))].sort().reverse();
     
     let streak = 0;
-    let currentDate = new Date();
+    const currentDate = new Date();
     
     for (let i = 0; i < 30; i++) {
       const dateStr = currentDate.toISOString().split('T')[0];
@@ -231,7 +230,7 @@ export default function ProfilePage() {
     ];
   };
 
-  const generateRecentActivity = (entries: any[], stats: UserStats): ActivityItem[] => {
+  const generateRecentActivity = (entries: JournalEntry[], stats: UserStats): ActivityItem[] => {
     const activities: ActivityItem[] = [];
     
     // Add recent journal entries
@@ -302,7 +301,7 @@ export default function ProfilePage() {
   }
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: User },
+    { id: 'overview', label: 'Overview', icon: UserIcon },
     { id: 'connections', label: 'Social', icon: LinkIcon },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
@@ -329,24 +328,26 @@ export default function ProfilePage() {
         </div>
 
         {/* Profile Header */}
-        <div className="mb-8">
-          <ProfileHeader 
-            user={user} 
-            stats={{
+        {user && (
+          <div className="mb-8">
+            <ProfileHeader 
+              user={user} 
+              stats={{
               memberSince: userStats.memberSince,
               totalEntries: userStats.totalEntries,
               goalsAchieved: userStats.goalsAchieved,
               currentStreak: userStats.currentStreak
             }} 
           />
-        </div>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-8">
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'overview' | 'settings' | 'connections')}
               className={`flex-1 flex items-center justify-center py-3 px-4 rounded-md text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-white text-accent shadow-sm'
@@ -468,7 +469,7 @@ export default function ProfilePage() {
                       </div>
                     ) : (
                       <div className="text-center py-12">
-                        <User className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <UserIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500 mb-4">No recent activity to show</p>
                         <Button
                           onClick={() => navigate('/journal')}

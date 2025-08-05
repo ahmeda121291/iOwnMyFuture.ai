@@ -10,17 +10,18 @@ import {
   Share,
   Download 
 } from 'lucide-react';
-import { getCurrentUser, supabase } from '../../lib/supabase';
-import { summarizeJournalEntry } from '../../lib/openai';
-import JournalEntryForm from '../../components/Journal/JournalEntryForm';
-import Button from '../../components/Shared/Button';
-import Modal from '../../components/Shared/Modal';
-import Loader from '../../components/Shared/Loader';
+import { getCurrentUser, supabase } from '../../core/api/supabase';
+import { summarizeJournalEntry } from '../../core/api/openai';
+import { type JournalEntry } from '../../core/types';
+import JournalEntryForm from '../../features/journal/JournalEntryForm';
+import Button from '../../shared/components/Button';
+import Modal from '../../shared/components/Modal';
+import Loader from '../../shared/components/Loader';
 
 export default function JournalEntryPage() {
   const { entryId } = useParams();
   const navigate = useNavigate();
-  const [entry, setEntry] = useState<any>(null);
+  const [entry, setEntry] = useState<JournalEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [regeneratingSummary, setRegeneratingSummary] = useState(false);
@@ -73,7 +74,7 @@ export default function JournalEntryPage() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {throw error;}
 
       setEntry(data);
       setEditing(false);
@@ -87,7 +88,7 @@ export default function JournalEntryPage() {
           .eq('id', entryId);
 
         if (!summaryError) {
-          setEntry((prev: any) => ({ ...prev, ai_summary: aiSummary }));
+          setEntry((prev) => prev ? ({ ...prev, ai_summary: aiSummary }) : prev);
         }
       } catch (aiError) {
         console.warn('AI summarization failed:', aiError);
@@ -109,9 +110,9 @@ export default function JournalEntryPage() {
         .from('journal_entries')
         .delete()
         .eq('id', entryId)
-        .eq('user_id', user.id);
+        .eq('user_id', user?.id);
 
-      if (error) throw error;
+      if (error) {throw error;}
 
       navigate('/journal');
     } catch (error) {
@@ -121,7 +122,7 @@ export default function JournalEntryPage() {
   };
 
   const regenerateAISummary = async () => {
-    if (!entry?.content) return;
+    if (!entry?.content) {return;}
 
     setRegeneratingSummary(true);
     try {
@@ -132,9 +133,9 @@ export default function JournalEntryPage() {
         .update({ ai_summary: aiSummary })
         .eq('id', entryId);
 
-      if (error) throw error;
+      if (error) {throw error;}
 
-      setEntry((prev: any) => ({ ...prev, ai_summary: aiSummary }));
+      setEntry((prev) => prev ? ({ ...prev, ai_summary: aiSummary }) : prev);
     } catch (error) {
       console.error('Error regenerating summary:', error);
       alert('Failed to regenerate AI summary. Please try again.');
@@ -313,7 +314,7 @@ export default function JournalEntryPage() {
                   </div>
                   {entry.created_at !== entry.updated_at && (
                     <div>
-                      Last updated {new Date(entry.updated_at).toLocaleDateString('en-US', {
+                      Last updated {new Date(entry.updated_at || entry.created_at).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         hour: 'numeric',

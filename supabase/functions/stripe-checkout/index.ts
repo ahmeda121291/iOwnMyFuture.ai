@@ -1,6 +1,8 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import { z } from 'npm:zod@3.25.76';
+import { authenticateAndValidateCSRF, handleCORS } from '../_shared/csrf-middleware.ts';
 
 // Read environment variables from the Edge Function secrets
 const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
@@ -13,64 +15,63 @@ const stripe = new Stripe(stripeSecret, {
   appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
 });
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': '*',
+};
+
+// Zod schema for request validation
+const CheckoutRequestSchema = z.object({
+  price_id: z.string().min(1, 'Price ID required'),
+  success_url: z.string().url('Invalid success URL'),
+  cancel_url: z.string().url('Invalid cancel URL'),
+  mode: z.enum(['payment', 'subscription']),
+  csrf_token: z.string().min(32, 'CSRF token required'),
+});
+
 // Helper to build CORS responses
 function corsResponse(body: string | object | null, status = 200) {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': '*',
-  };
-
   if (status === 204) {
-    return new Response(null, { status, headers });
+    return new Response(null, { status, headers: corsHeaders });
   }
 
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...headers, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
 
 Deno.serve(async (req) => {
   try {
     if (req.method === 'OPTIONS') {
-      return corsResponse({}, 204);
+      return handleCORS(corsHeaders);
     }
 
     if (req.method !== 'POST') {
       return corsResponse({ error: 'Method not allowed' }, 405);
     }
 
-    const { price_id, success_url, cancel_url, mode } = await req.json();
-
-    const error = validateParameters(
-      { price_id, success_url, cancel_url, mode },
-      {
-        cancel_url: 'string',
-        price_id: 'string',
-        success_url: 'string',
-        mode: { values: ['payment', 'subscription'] },
-      },
-    );
-
-    if (error) {
-      return corsResponse({ error }, 400);
+    // Authenticate and validate CSRF token
+    const authResult = await authenticateAndValidateCSRF(req, { corsHeaders });
+    if (!authResult.success) {
+      return authResult.response!;
     }
 
-    const authHeader = req.headers.get('Authorization')!;
-    const token = authHeader.replace('Bearer ', '');
-    const {
-      data: { user },
-      error: getUserError,
-    } = await supabase.auth.getUser(token);
+    const user = authResult.user!;
 
-    if (getUserError) {
-      return corsResponse({ error: 'Failed to authenticate user' }, 401);
+    // Parse and validate request body
+    const requestBody = await req.json();
+    const validationResult = CheckoutRequestSchema.safeParse(requestBody);
+    
+    if (!validationResult.success) {
+      const errorMessage = validationResult.error.errors
+        .map(err => `${err.path.join('.')}: ${err.message}`)
+        .join(', ');
+      return corsResponse({ error: `Validation error: ${errorMessage}` }, 400);
     }
 
-    if (!user) {
-      return corsResponse({ error: 'User not found' }, 404);
-    }
+    const { price_id, success_url, cancel_url, mode } = validationResult.data;
 
     const { data: customer, error: getCustomerError } = await supabase
       .from('stripe_customers')

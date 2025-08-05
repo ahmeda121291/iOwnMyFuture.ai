@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentUser } from '../lib/supabase';
-import AuthForm from '../components/Auth/AuthForm';
-import Loader from '../components/Shared/Loader';
+import { getCurrentUser } from '../core/api/supabase';
+import AuthForm from '../features/auth/AuthForm';
+import Loader from '../shared/components/Loader';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
@@ -11,20 +11,20 @@ export default function AuthPage() {
 
   useEffect(() => {
     checkUser();
-  }, []);
+  }, [checkUser]);
 
-  const checkUser = async () => {
+  const checkUser = useCallback(async () => {
     try {
       const user = await getCurrentUser();
       if (user) {
         navigate('/dashboard');
       }
-    } catch (error) {
+    } catch (_error) {
       // User not authenticated, stay on auth page
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigate]);
 
   const handleAuthSuccess = () => {
     navigate('/dashboard');

@@ -8,11 +8,10 @@ import {
   Target,
   Calendar,
   Mail,
-  Gift,
-  Download
+  Gift
 } from 'lucide-react';
-import Button from '../components/Shared/Button';
-import Loader from '../components/Shared/Loader';
+import Button from '../shared/components/Button';
+import Loader from '../shared/components/Loader';
 
 interface SessionDetails {
   sessionId: string;
