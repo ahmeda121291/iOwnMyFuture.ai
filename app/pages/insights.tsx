@@ -81,15 +81,19 @@ export default function InsightsPage() {
       if (entriesError) {throw entriesError;}
       setJournalEntries(entries || []);
 
-      // Load real moodboard updates from Supabase
-      const { data: updates, error: updatesError } = await supabase
-        .from('moodboard_updates')
+      // Load moodboards instead of moodboard_updates (table doesn't exist)
+      const { data: moodboardData, error: moodboardError } = await supabase
+        .from('moodboards')
         .select('id, updated_at')
         .eq('user_id', userId)
         .gte('updated_at', cutoffDate.toISOString());
         
-      if (updatesError) {throw updatesError;}
-      setMoodboards(updates || []);
+      if (moodboardError) {
+        console.warn('Error loading moodboards:', moodboardError);
+        setMoodboards([]);
+      } else {
+        setMoodboards(moodboardData || []);
+      }
 
       // Generate AI insights if we have entries
       if (entries && entries.length > 0) {

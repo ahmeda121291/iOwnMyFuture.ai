@@ -76,7 +76,7 @@ export default function LandingPage() {
   // Smart CTA handler - routes based on auth status
   const handleStartJournaling = () => {
     if (user) {
-      navigate('/journal');
+      navigate('/dashboard');
     } else {
       navigate('/auth');
     }

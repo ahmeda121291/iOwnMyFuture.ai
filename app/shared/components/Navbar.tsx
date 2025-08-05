@@ -64,22 +64,28 @@ export default function Navbar() {
   }
 
   const isActive = (path: string) => location.pathname === path
+  const isLandingPage = location.pathname === '/'
+  const showLogo = user || !isLandingPage // Show logo only when logged in or not on landing page
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-primary/10 shadow-sm">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo */}
-        <div 
-          className="flex items-center space-x-3 cursor-pointer group"
-          onClick={() => navigate('/')}
-        >
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary-600 to-accent-600 shadow-lg group-hover:shadow-xl transition-shadow flex items-center justify-center">
-            <span className="text-white font-bold text-lg">iO</span>
+        {/* Logo - Only show when logged in or not on landing page */}
+        {showLogo ? (
+          <div 
+            className="flex items-center space-x-3 cursor-pointer group"
+            onClick={() => navigate(user ? '/dashboard' : '/')}
+          >
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-primary-600 to-accent-600 shadow-lg group-hover:shadow-xl transition-shadow flex items-center justify-center">
+              <span className="text-white font-bold text-lg">iO</span>
+            </div>
+            <h1 className="text-xl font-bold text-gray-900">
+              iOwnMyFuture<span className="text-accent-600">.ai</span>
+            </h1>
           </div>
-          <h1 className="text-xl font-bold text-gray-900">
-            iOwnMyFuture<span className="text-accent-600">.ai</span>
-          </h1>
-        </div>
+        ) : (
+          <div /> // Empty div to maintain flex layout
+        )}
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-1">

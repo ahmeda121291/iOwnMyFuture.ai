@@ -22,6 +22,7 @@ import InsightsPage from './pages/insights';
 import ProfilePage from './pages/Profile';
 import AdminPage from './pages/Admin';
 import ShareSnapshot from './pages/ShareSnapshot';
+import NotFoundPage from './pages/NotFound';
 
 function AppRouter() {
   const [loading, setLoading] = useState(true);
@@ -154,8 +155,12 @@ function AppRouter() {
               </AdminRoute>
             } />
 
-            {/* Catch all - redirect to home */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 404 Page */}
+            <Route path="*" element={
+              <AppLayout>
+                <NotFoundPage />
+              </AppLayout>
+            } />
           </Routes>
         </div>
       </Router>

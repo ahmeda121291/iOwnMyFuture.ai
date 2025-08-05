@@ -7,6 +7,7 @@ import { type User, type JournalEntry } from '../core/types';
 import { useJournalEntries, useCreateJournalEntry, useUpdateJournalEntry, useDeleteJournalEntry } from '../shared/hooks/queries/useJournalQueries';
 import JournalCalendar from '../features/journal/JournalCalendar';
 import JournalEntryForm from '../features/journal/JournalEntryForm';
+import FullScreenEditor from '../features/journal/FullScreenEditor';
 import EntrySummaryCard from '../features/journal/EntrySummaryCard';
 import JournalPrompt from '../features/journal/JournalPrompt';
 import Button from '../shared/components/Button';
@@ -21,6 +22,7 @@ export default function JournalPage() {
   const [user, setUser] = useState<User | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showEntryForm, setShowEntryForm] = useState(false);
+  const [showFullScreenEditor, setShowFullScreenEditor] = useState(false);
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [viewingEntry, setViewingEntry] = useState<JournalEntry | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'month' | 'week'>('month');
@@ -201,7 +203,7 @@ export default function JournalPage() {
 
   const handleEditEntry = useCallback((entry: JournalEntry) => {
     setEditingEntry(entry);
-    setShowEntryForm(true);
+    setShowFullScreenEditor(true);
     setViewingEntry(null);
   }, []);
 
@@ -213,7 +215,7 @@ export default function JournalPage() {
     if (entryForDate) {
       setViewingEntry(entryForDate);
     } else {
-      setShowEntryForm(true);
+      setShowFullScreenEditor(true);
     }
   }, [entriesData]);
 
@@ -266,7 +268,7 @@ export default function JournalPage() {
           <Button
             onClick={() => {
               setEditingEntry(null);
-              setShowEntryForm(true);
+              setShowFullScreenEditor(true);
             }}
             disabled={createMutation.isPending}
           >
@@ -406,7 +408,7 @@ export default function JournalPage() {
                 <Button
                   onClick={() => {
                     setEditingEntry(null);
-                    setShowEntryForm(true);
+                    setShowFullScreenEditor(true);
                   }}
                 >
                   Write Your First Entry
@@ -529,6 +531,22 @@ export default function JournalPage() {
           </div>
         </Modal>
       )}
+
+      {/* Full Screen Editor */}
+      <FullScreenEditor
+        isOpen={showFullScreenEditor}
+        onClose={() => {
+          setShowFullScreenEditor(false);
+          setEditingEntry(null);
+        }}
+        onSave={handleSaveEntry}
+        selectedDate={selectedDate}
+        existingEntry={editingEntry || undefined}
+        recentEntries={entries}
+        onSelectEntry={(entry) => {
+          setEditingEntry(entry);
+        }}
+      />
     </div>
   );
 }
