@@ -10,7 +10,7 @@ import {
   Sparkles,
   Zap
 } from 'lucide-react';
-import { getUserSubscription } from '../../lib/supabase';
+import { getUserSubscription, supabase } from '../../lib/supabase';
 import { getProductByPriceId } from '../../lib/stripeConfig';
 import Button from '../Shared/Button';
 import Modal from '../Shared/Modal';
@@ -45,8 +45,8 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
     try {
       const data = await getUserSubscription();
       setSubscription(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -86,12 +86,35 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
     });
   };
 
-  const handleManageSubscription = () => {
-    // TODO: Implement Stripe Customer Portal session creation
-    // This should create a customer portal session and redirect to it
-    console.log('Manage subscription clicked - implement customer portal');
-    // For now, redirect to pricing page
-    window.location.href = '/pricing';
+  const handleManageSubscription = async () => {
+    try {
+      setLoading(true);
+      
+      const { data: result, error } = await supabase.functions.invoke('stripe-portal', {
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (result?.url) {
+        window.location.href = result.url;
+      } else {
+        throw new Error('No billing portal URL received');
+      }
+    } catch (error: unknown) {
+      console.error('Error opening billing portal:', error);
+      alert(
+        `Failed to open billing portal: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpgrade = () => {
