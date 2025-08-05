@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { getCurrentUser, supabase } from '../lib/supabase';
 import { generateMoodboard, generateAdvancedMoodboard } from '../lib/openai';
+import { updateOnboardingProgress } from '../lib/onboarding';
 import MoodboardCanvas from '../components/Moodboard/MoodboardCanvas';
 import VisionSnap from '../components/Moodboard/VisionSnap';
 import VisionScore from '../components/Moodboard/VisionScore';
@@ -200,6 +201,9 @@ export default function MoodboardPage() {
         if (error) throw error;
         setCurrentMoodboard(data);
         setMoodboards(prev => [data, ...prev]);
+        
+        // Update onboarding progress for first moodboard
+        await updateOnboardingProgress('created_first_moodboard', true);
       }
 
       setIsEditing(false);

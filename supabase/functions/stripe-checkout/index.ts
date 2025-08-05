@@ -10,7 +10,7 @@ const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 // Initialize clients
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 const stripe = new Stripe(stripeSecret, {
-  appInfo: { name: 'Bolt Integration', version: '1.0.0' },
+  appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
 });
 
 // Helper to build CORS responses
@@ -86,6 +86,26 @@ Deno.serve(async (req) => {
 
     let customerId: string;
 
+    // CRITICAL: Validate price_id exists and is active
+    try {
+      const price = await stripe.prices.retrieve(price_id);
+      if (!price.active) {
+        console.error(`Attempted to use inactive price: ${price_id}`);
+        return corsResponse({ error: 'Invalid price' }, 400);
+      }
+      
+      // Additional validation: ensure price is for the correct product
+      if (mode === 'subscription' && price.type !== 'recurring') {
+        return corsResponse({ error: 'Invalid price type for subscription' }, 400);
+      }
+      if (mode === 'payment' && price.type !== 'one_time') {
+        return corsResponse({ error: 'Invalid price type for one-time payment' }, 400);
+      }
+    } catch (priceError) {
+      console.error(`Failed to validate price ${price_id}:`, priceError);
+      return corsResponse({ error: 'Invalid price' }, 400);
+    }
+
     // Create Stripe customer mapping if none exists
     if (!customer || !customer.customer_id) {
       const newCustomer = await stripe.customers.create({
@@ -157,33 +177,56 @@ Deno.serve(async (req) => {
             console.error('Failed to create subscription record for existing customer', createSubscriptionError);
             return corsResponse({ error: 'Failed to create subscription record for existing customer' }, 500);
           }
+        } else if (subscription.status === 'active' || subscription.status === 'trialing') {
+          // Prevent creating a new subscription if one is already active
+          console.error(`User ${user.id} attempted to create subscription while having active status: ${subscription.status}`);
+          return corsResponse({ error: 'Active subscription already exists' }, 400);
         }
       }
     }
 
-    // Create Stripe Checkout session
+    // CRITICAL: Verify customer belongs to authenticated user before creating session
+    const stripeCustomer = await stripe.customers.retrieve(customerId);
+    if (stripeCustomer.deleted) {
+      console.error(`Attempted to use deleted customer: ${customerId}`);
+      return corsResponse({ error: 'Invalid customer' }, 400);
+    }
+    
+    // Verify the customer metadata matches the authenticated user
+    if (stripeCustomer.metadata?.userId && stripeCustomer.metadata.userId !== user.id) {
+      console.error(`Customer ${customerId} does not belong to user ${user.id}`);
+      return corsResponse({ error: 'Unauthorized' }, 403);
+    }
+
+    // Create Stripe Checkout session with client_reference_id for webhook validation
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
+      client_reference_id: user.id, // Critical: links session to user for webhook processing
       payment_method_types: ['card'],
       line_items: [{ price: price_id, quantity: 1 }],
       mode,
       success_url,
       cancel_url,
+      metadata: {
+        userId: user.id,
+        priceId: price_id,
+      },
     });
 
     console.log(`Created checkout session ${session.id} for customer ${customerId}`);
 
     return corsResponse({ sessionId: session.id, url: session.url });
-  } catch (error: any) {
-    console.error(`Checkout error: ${error.message}`);
-    return corsResponse({ error: error.message }, 500);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`Checkout error: ${errorMessage}`);
+    return corsResponse({ error: 'Failed to create checkout session' }, 500);
   }
 });
 
 type ExpectedType = 'string' | { values: string[] };
 type Expectations<T> = { [K in keyof T]: ExpectedType };
 
-function validateParameters<T extends Record<string, any>>(values: T, expected: Expectations<T>): string | undefined {
+function validateParameters<T extends Record<string, unknown>>(values: T, expected: Expectations<T>): string | undefined {
   for (const parameter in values) {
     const expectation = expected[parameter];
     const value = values[parameter];
@@ -196,7 +239,7 @@ function validateParameters<T extends Record<string, any>>(values: T, expected: 
         return `Expected parameter ${parameter} to be a string got ${JSON.stringify(value)}`;
       }
     } else {
-      if (!expectation.values.includes(value)) {
+      if (!expectation.values.includes(value as string)) {
         return `Expected parameter ${parameter} to be one of ${expectation.values.join(', ')}`;
       }
     }

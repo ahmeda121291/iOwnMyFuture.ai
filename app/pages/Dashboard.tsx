@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus } from 'lucide-react';
 import { getCurrentUser, getUserSubscription, supabase } from '../lib/supabase';
-import { getProductByPriceId } from '../lib/stripeConfig';
 import Button from '../components/Shared/Button';
 import Loader from '../components/Shared/Loader';
 import SubscriptionStatus from '../components/Subscription/SubscriptionStatus';
+import MoodAnalyticsPanel from '../components/Analytics/MoodAnalyticsPanel';
+import FirstTimeChecklist from '../components/Onboarding/FirstTimeChecklist';
 
 export default function DashboardPage() {
-  const [user, setUser] = useState<any>(null);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string; email?: string; created_at: string } | null>(null);
+  const [subscription, setSubscription] = useState<{ subscription_status: string } | null>(null);
   const [boardCount, setBoardCount] = useState(0);
   const [entryCount, setEntryCount] = useState(0);
   const [daysActive, setDaysActive] = useState(0);
@@ -60,7 +61,6 @@ export default function DashboardPage() {
   }
 
   const hasActiveSubscription = subscription && ['active', 'trialing'].includes(subscription.subscription_status);
-  const currentPlan = subscription?.price_id ? getProductByPriceId(subscription.price_id) : null;
 
   const quickActions = [
     {
@@ -98,6 +98,9 @@ export default function DashboardPage() {
             Ready to continue your transformation journey?
           </p>
         </div>
+
+        {/* First Time Checklist */}
+        <FirstTimeChecklist />
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
@@ -143,6 +146,9 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
+
+            {/* Mood Analytics */}
+            <MoodAnalyticsPanel />
 
             {/* Recent Activity */}
             <div>

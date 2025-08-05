@@ -5,6 +5,7 @@ import { getCurrentUser } from './lib/supabase';
 // Components
 import ErrorBoundary from './components/Shared/ErrorBoundary';
 import PrivateRoute from './components/Shared/PrivateRoute';
+import AdminRoute from './components/Shared/AdminRoute';
 import AppLayout from './components/Shared/AppLayout';
 import Loader from './components/Shared/Loader';
 
@@ -19,6 +20,7 @@ import JournalEntryPage from './pages/journal/[entryId]';
 import MoodboardPage from './pages/Moodboard';
 import InsightsPage from './pages/insights';
 import ProfilePage from './pages/Profile';
+import AdminPage from './pages/Admin';
 
 function AppRouter() {
   const [user, setUser] = useState<any>(null);
@@ -121,6 +123,15 @@ function AppRouter() {
                   <ProfilePage />
                 </AppLayout>
               </PrivateRoute>
+            } />
+
+            {/* Admin Route */}
+            <Route path="/admin" element={
+              <AdminRoute>
+                <AppLayout>
+                  <AdminPage />
+                </AppLayout>
+              </AdminRoute>
             } />
 
             {/* Catch all - redirect to home */}

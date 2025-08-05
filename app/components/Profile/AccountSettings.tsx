@@ -7,13 +7,9 @@ import {
   Bell, 
   Palette, 
   User, 
-  Lock, 
   Globe, 
   Moon, 
   Sun,
-  Volume2,
-  VolumeX,
-  Check,
   AlertTriangle,
   Mail,
   Smartphone,
@@ -50,7 +46,7 @@ interface UserSettings {
 }
 
 export default function AccountSettings() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string; email?: string; user_metadata?: { full_name?: string } } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -174,7 +170,7 @@ export default function AccountSettings() {
 
       alert('Settings saved successfully!');
       setSettings(prev => ({ ...prev, password: '', confirmPassword: '' }));
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving settings:', error);
       alert(error.message || 'Failed to save settings. Please try again.');
     } finally {
@@ -182,17 +178,17 @@ export default function AccountSettings() {
     }
   };
 
-  const updateNestedSetting = (category: keyof UserSettings, key: string, value: any) => {
+  const updateNestedSetting = (category: keyof UserSettings, key: string, value: unknown) => {
     setSettings(prev => ({
       ...prev,
       [category]: {
-        ...(prev[category] as any),
+        ...(prev[category] as Record<string, unknown>),
         [key]: value
       }
     }));
   };
 
-  const updateSetting = (key: keyof UserSettings, value: any) => {
+  const updateSetting = (key: keyof UserSettings, value: unknown) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
@@ -226,7 +222,7 @@ export default function AccountSettings() {
           {sections.map((section) => (
             <button
               key={section.id}
-              onClick={() => setActiveSection(section.id as any)}
+              onClick={() => setActiveSection(section.id as 'profile' | 'notifications' | 'privacy' | 'preferences')}
               className={`flex-1 flex items-center justify-center py-3 px-4 rounded-xl text-sm font-medium transition-all duration-300 ${
                 activeSection === section.id
                   ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg'

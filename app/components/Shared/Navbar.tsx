@@ -1,21 +1,33 @@
 import React, { useState, useEffect } from 'react'
-import { LogOut, Menu, X, Home, DollarSign } from 'lucide-react'
+import { LogOut, Menu, X, Home, DollarSign, Shield } from 'lucide-react'
 import { supabase, getCurrentUser, signOut } from '../../lib/supabase'
+import { checkIsAdmin } from '../../lib/admin'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 export default function Navbar() {
   const [user, setUser] = useState<any>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
     // Get initial user
-    getCurrentUser().then(setUser).catch(() => setUser(null))
+    getCurrentUser().then(user => {
+      setUser(user)
+      if (user) {
+        checkIsAdmin(user.id).then(setIsAdmin)
+      }
+    }).catch(() => setUser(null))
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null)
+      if (session?.user) {
+        checkIsAdmin(session.user.id).then(setIsAdmin)
+      } else {
+        setIsAdmin(false)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -80,6 +92,15 @@ export default function Navbar() {
               >
                 Profile
               </NavButton>
+              {isAdmin && (
+                <NavButton 
+                  onClick={() => navigate('/admin')}
+                  isActive={isActive('/admin')}
+                >
+                  <Shield size={16} className="mr-1.5 inline" />
+                  Admin
+                </NavButton>
+              )}
               <div className="flex items-center space-x-2 ml-4">
                 <button 
                   onClick={handleSignOut}
@@ -161,6 +182,15 @@ export default function Navbar() {
                 >
                   Profile
                 </MobileNavButton>
+                {isAdmin && (
+                  <MobileNavButton 
+                    onClick={() => { navigate('/admin'); setIsMenuOpen(false) }}
+                    isActive={isActive('/admin')}
+                  >
+                    <Shield size={16} className="mr-1.5 inline" />
+                    Admin
+                  </MobileNavButton>
+                )}
                 <div className="border-t border-primary/10 pt-3 mt-3">
                   <button 
                     onClick={handleSignOut}

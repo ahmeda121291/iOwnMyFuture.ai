@@ -14,7 +14,6 @@ import { getUserSubscription, supabase } from '../../lib/supabase';
 import { getProductByPriceId } from '../../lib/stripeConfig';
 import Button from '../Shared/Button';
 import Modal from '../Shared/Modal';
-import Loader from '../Shared/Loader';
 
 interface Subscription {
   id: string;
@@ -27,11 +26,10 @@ interface Subscription {
 }
 
 interface SubscriptionStatusProps {
-  userId?: string;
   compact?: boolean;
 }
 
-export default function SubscriptionStatus({ userId, compact = false }: SubscriptionStatusProps) {
+export default function SubscriptionStatus({ compact = false }: SubscriptionStatusProps) {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,7 +37,7 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
 
   useEffect(() => {
     loadSubscription();
-  }, [userId]);
+  }, []);
 
   const loadSubscription = async () => {
     try {
@@ -193,7 +191,7 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
           
           <Button
             onClick={handleUpgrade}
-            size={compact ? "sm" : "md"}
+            size={compact ? "small" : "medium"}
             className="ml-4"
           >
             <Crown className="w-4 h-4 mr-1" />
@@ -271,7 +269,7 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
             {!compact && planDetails.cycle === 'month' && (
               <Button
                 variant="secondary"
-                size="sm"
+                size="small"
                 onClick={handleUpgrade}
               >
                 <Zap className="w-4 h-4 mr-1" />
@@ -281,7 +279,7 @@ export default function SubscriptionStatus({ userId, compact = false }: Subscrip
             
             <Button
               variant="secondary"
-              size={compact ? "sm" : "md"}
+              size={compact ? "small" : "medium"}
               onClick={() => setShowManageModal(true)}
             >
               <Settings className="w-4 h-4 mr-1" />

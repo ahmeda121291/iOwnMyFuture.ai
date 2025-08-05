@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
-import { PenTool, Sparkles, Save, Shuffle } from 'lucide-react';
+import { PenTool, Sparkles, Save, Shuffle, Brain, Loader2 } from 'lucide-react';
 import Button from '../Shared/Button';
+import { supabase } from '../../lib/supabase';
+import { updateOnboardingProgress } from '../../lib/onboarding';
 
 interface JournalEntryFormProps {
   selectedDate: Date;
-  existingEntry?: any;
+  existingEntry?: {
+    id?: string;
+    content?: string;
+    ai_summary?: string;
+  };
   onSave: (content: string) => Promise<void>;
   onCancel?: () => void;
 }
@@ -13,6 +19,9 @@ export default function JournalEntryForm({ selectedDate, existingEntry, onSave, 
   const [content, setContent] = useState(existingEntry?.content || '');
   const [saving, setSaving] = useState(false);
   const [wordCount, setWordCount] = useState(content.split(/\s+/).filter(Boolean).length);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [summary, setSummary] = useState(existingEntry?.ai_summary || '');
+  const [showSummary, setShowSummary] = useState(!!existingEntry?.ai_summary);
 
   const prompts = [
     "What am I most grateful for today?",
@@ -43,6 +52,10 @@ export default function JournalEntryForm({ selectedDate, existingEntry, onSave, 
     setSaving(true);
     try {
       await onSave(content);
+      // Update onboarding progress for first journal
+      if (!existingEntry) {
+        await updateOnboardingProgress('created_first_journal', true);
+      }
     } catch (error) {
       console.error('Error saving journal entry:', error);
     } finally {
@@ -72,6 +85,37 @@ export default function JournalEntryForm({ selectedDate, existingEntry, onSave, 
 
   const getReadingTime = () => {
     return Math.ceil(wordCount / 200);
+  };
+
+  const generateAISummary = async () => {
+    if (!content.trim() || wordCount < 20) {
+      alert('Please write at least 20 words before generating a summary.');
+      return;
+    }
+
+    setGeneratingSummary(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('summarize-entry', {
+        body: { 
+          entryContent: content,
+          entryId: existingEntry?.id 
+        },
+      });
+
+      if (error) throw error;
+
+      if (result?.summary) {
+        setSummary(result.summary);
+        setShowSummary(true);
+        // Update onboarding progress for AI summary
+        await updateOnboardingProgress('generated_ai_summary', true);
+      }
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      alert('Failed to generate AI summary. Please try again.');
+    } finally {
+      setGeneratingSummary(false);
+    }
   };
 
   return (
@@ -140,10 +184,53 @@ export default function JournalEntryForm({ selectedDate, existingEntry, onSave, 
         />
       </div>
 
+      {/* AI Summary Section */}
+      {showSummary && summary && (
+        <div className="mb-6 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center mb-2">
+                <Brain className="w-5 h-5 text-purple-600 mr-2" />
+                <p className="font-semibold text-purple-600">AI Summary</p>
+              </div>
+              <p className="text-text-primary italic">{summary}</p>
+            </div>
+            <button
+              onClick={() => setShowSummary(false)}
+              className="text-purple-400 hover:text-purple-600 transition-colors"
+              title="Hide summary"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center justify-between mb-6">
-        <div className="text-sm text-text-secondary">
-          {content.trim() ? 'Your thoughts will be private and secure' : 'Start writing to capture your thoughts'}
+        <div className="flex items-center space-x-3">
+          <div className="text-sm text-text-secondary">
+            {content.trim() ? 'Your thoughts will be private and secure' : 'Start writing to capture your thoughts'}
+          </div>
+          {wordCount >= 20 && (
+            <button
+              onClick={generateAISummary}
+              disabled={generatingSummary}
+              className="flex items-center px-4 py-2 bg-purple-100 text-purple-700 rounded-full hover:bg-purple-200 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generatingSummary ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Brain className="w-4 h-4 mr-2" />
+                  {summary ? 'Regenerate' : 'Generate'} AI Summary
+                </>
+              )}
+            </button>
+          )}
         </div>
         
         <div className="flex space-x-3">
