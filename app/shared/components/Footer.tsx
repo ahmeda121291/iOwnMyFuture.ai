@@ -1,20 +1,22 @@
-import React from 'react'
-import { Heart, Twitter, Instagram, Linkedin, Mail } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import React from 'react';
+import { Heart, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { getActiveSocialLinks } from '../../config/socials';
 
 interface SocialButtonProps {
-  href: string
-  icon: React.ReactNode
-  label: string
+  href: string;
+  icon: React.ReactNode;
+  label: string;
 }
 
 interface FooterLinkProps {
-  children: React.ReactNode
-  onClick: () => void
+  children: React.ReactNode;
+  onClick: () => void;
 }
 
 export default function Footer() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const activeSocials = getActiveSocialLinks();
 
   return (
     <footer className="bg-gradient-to-r from-background to-primary/5 border-t border-primary/10 py-12 mt-16">
@@ -34,23 +36,21 @@ export default function Footer() {
               mindful journaling, and personalized insights.
             </p>
             <div className="flex items-center space-x-4">
+              {/* Only show active social links from config */}
+              {activeSocials.map((social) => {
+                const Icon = social.icon;
+                return (
+                  <SocialButton 
+                    key={social.name}
+                    href={social.url} 
+                    icon={<Icon size={20} />}
+                    label={social.name}
+                  />
+                );
+              })}
+              {/* Always show email contact */}
               <SocialButton 
-                href="https://twitter.com/iownmyfuture" 
-                icon={<Twitter size={20} />}
-                label="Twitter"
-              />
-              <SocialButton 
-                href="https://instagram.com/iownmyfuture" 
-                icon={<Instagram size={20} />}
-                label="Instagram"
-              />
-              <SocialButton 
-                href="https://linkedin.com/company/iownmyfuture" 
-                icon={<Linkedin size={20} />}
-                label="LinkedIn"
-              />
-              <SocialButton 
-                href="mailto:hello@iownmyfuture.ai" 
+                href="mailto:support@iownmyfuture.ai" 
                 icon={<Mail size={20} />}
                 label="Email"
               />
@@ -89,6 +89,8 @@ export default function Footer() {
             </div>
             
             <div className="flex items-center space-x-6 text-sm text-text-secondary">
+              {/* Remove privacy and terms links until those pages exist */}
+              {/*
               <button 
                 onClick={() => navigate('/privacy')}
                 className="hover:text-accent transition-colors"
@@ -101,13 +103,14 @@ export default function Footer() {
               >
                 Terms of Service
               </button>
+              */}
               <span>© 2025 iOwnMyFuture.ai</span>
             </div>
           </div>
         </div>
       </div>
     </footer>
-  )
+  );
 }
 
 // Helper Components
@@ -122,7 +125,7 @@ function SocialButton({ href, icon, label }: SocialButtonProps) {
     >
       {icon}
     </a>
-  )
+  );
 }
 
 function FooterLink({ children, onClick }: FooterLinkProps) {
@@ -133,5 +136,5 @@ function FooterLink({ children, onClick }: FooterLinkProps) {
     >
       {children}
     </button>
-  )
+  );
 }

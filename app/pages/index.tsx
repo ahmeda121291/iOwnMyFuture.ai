@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, 
   BookOpen, 
@@ -7,39 +7,61 @@ import {
   ArrowRight,
   Brain,
   BarChart3,
-  Play,
   ChevronDown,
   Shield,
-  Clock
-} from 'lucide-react'
-import Button from '../shared/components/Button'
+  Clock,
+  PenTool,
+  Target,
+  Star,
+  Quote,
+  Award,
+  TrendingUp
+} from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Link as ScrollLink, animateScroll as scroll } from 'react-scroll';
+import Button from '../shared/components/Button';
 
 interface Feature {
-  icon: React.ReactNode
-  title: string
-  description: string
-  highlight: string
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  highlight: string;
+}
+
+interface HowItWorksStep {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  step: number;
+}
+
+interface Testimonial {
+  name: string;
+  role: string;
+  content: string;
+  rating: number;
+  avatar: string;
 }
 
 export default function LandingPage() {
-  const navigate = useNavigate()
-  const [isVisible, setIsVisible] = useState<boolean>(false)
+  const navigate = useNavigate();
+  const [isVisible, setIsVisible] = useState<boolean>(false);
 
   useEffect(() => {
-    setIsVisible(true)
+    setIsVisible(true);
     
     // Update page meta tags
-    document.title = 'iOwnMyFuture.ai - Unlock Your Future with AI-Powered Vision Boards'
-    const metaDescription = document.querySelector('meta[name="description"]')
+    document.title = 'iOwnMyFuture.ai - Unlock Your Future with AI-Powered Vision Boards';
+    const metaDescription = document.querySelector('meta[name="description"]');
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'Transform your dreams into reality with AI-powered vision boards, smart journaling, and personalized insights. Start your journey to success today.')
+      metaDescription.setAttribute('content', 'Transform your dreams into reality with AI-powered vision boards, smart journaling, and personalized insights. Start your journey to success today.');
     } else {
-      const meta = document.createElement('meta')
-      meta.name = 'description'
-      meta.content = 'Transform your dreams into reality with AI-powered vision boards, smart journaling, and personalized insights. Start your journey to success today.'
-      document.head.appendChild(meta)
+      const meta = document.createElement('meta');
+      meta.name = 'description';
+      meta.content = 'Transform your dreams into reality with AI-powered vision boards, smart journaling, and personalized insights. Start your journey to success today.';
+      document.head.appendChild(meta);
     }
-  }, [])
+  }, []);
 
   const features: Feature[] = [
     {
@@ -60,14 +82,74 @@ export default function LandingPage() {
       description: "Watch your future unfold through data. Advanced analytics show where you've been and predict where you're going.",
       highlight: "Future-Forward Tracking"
     }
-  ]
+  ];
 
-  const scrollToFeatures = () => {
-    document.getElementById('features')?.scrollIntoView({ 
-      behavior: 'smooth',
-      block: 'start'
-    })
-  }
+  const howItWorksSteps: HowItWorksStep[] = [
+    {
+      icon: <PenTool className="w-10 h-10 text-primary-600" />,
+      title: "Journal your thoughts",
+      description: "Write freely about your day, dreams, and goals. Our AI understands context and emotion.",
+      step: 1
+    },
+    {
+      icon: <Brain className="w-10 h-10 text-accent-600" />,
+      title: "Get instant AI insights",
+      description: "Receive personalized summaries and discover patterns in your thoughts and behaviors.",
+      step: 2
+    },
+    {
+      icon: <Target className="w-10 h-10 text-purple-600" />,
+      title: "Build your vision board",
+      description: "Create stunning visual representations of your goals with AI-generated imagery.",
+      step: 3
+    }
+  ];
+
+  const testimonials: Testimonial[] = [
+    {
+      name: "Sarah Chen",
+      role: "Entrepreneur & Life Coach",
+      content: "This platform transformed how I approach goal-setting. The AI insights are incredibly accurate and the vision boards keep me motivated every single day.",
+      rating: 5,
+      avatar: "SC"
+    },
+    {
+      name: "Michael Rodriguez",
+      role: "Tech Executive",
+      content: "I've tried dozens of productivity apps, but nothing comes close to this. The journaling feature alone has helped me gain clarity on my career path.",
+      rating: 5,
+      avatar: "MR"
+    },
+    {
+      name: "Emma Thompson",
+      role: "Creative Director",
+      content: "The AI-powered vision boards are a game-changer. They help me visualize my creative projects in ways I never thought possible.",
+      rating: 5,
+      avatar: "ET"
+    }
+  ];
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.2
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.6,
+        ease: "easeOut"
+      }
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1]">
@@ -81,24 +163,31 @@ export default function LandingPage() {
         </div>
 
         <div className="relative z-10 container mx-auto px-6 text-center">
-          <div className={`transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+          >
             {/* Floating Badge */}
-            <div className="inline-flex items-center px-6 py-2 bg-white/30 backdrop-blur-sm border border-white/20 rounded-full text-sm font-medium text-gray-800 mb-8 hover:bg-white/40 transition-all duration-300">
+            <motion.div 
+              className="inline-flex items-center px-6 py-2 bg-white/30 backdrop-blur-sm border border-white/20 rounded-full text-sm font-medium text-gray-800 mb-8 hover:bg-white/40 transition-all duration-300"
+              whileHover={{ scale: 1.05 }}
+            >
               <Sparkles className="w-4 h-4 mr-2 text-accent-600" />
               Powered by Advanced AI Technology
               <ArrowRight className="w-4 h-4 ml-2" />
-            </div>
+            </motion.div>
 
-         <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-transparent leading-tight">
-  <span className="bg-clip-text bg-gradient-to-r from-gray-900 via-primary-600 to-accent-600">
-    Unlock Your
-  </span>
-  <br />
-  <span className="relative bg-clip-text bg-gradient-to-r from-gray-900 via-primary-600 to-accent-600">
-    Future
-    <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-primary-400 to-accent-400 rounded-full transform scale-x-0 animate-[scaleX_1s_ease-out_0.5s_forwards] origin-left"></div>
-  </span>
-</h1>
+            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-transparent leading-tight">
+              <span className="bg-clip-text bg-gradient-to-r from-gray-900 via-primary-600 to-accent-600">
+                Unlock Your
+              </span>
+              <br />
+              <span className="relative bg-clip-text bg-gradient-to-r from-gray-900 via-primary-600 to-accent-600">
+                Future
+                <div className="absolute -bottom-2 left-0 right-0 h-1 bg-gradient-to-r from-primary-400 to-accent-400 rounded-full transform scale-x-0 animate-[scaleX_1s_ease-out_0.5s_forwards] origin-left"></div>
+              </span>
+            </h1>
 
             {/* Subheadline */}
             <p className="text-xl md:text-2xl lg:text-3xl text-gray-700 mb-12 max-w-4xl mx-auto leading-relaxed font-light">
@@ -109,64 +198,197 @@ export default function LandingPage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16">
-              <Button
-                onClick={() => navigate('/auth')}
-                className="group relative overflow-hidden bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-accent-500/25 transform hover:scale-105 transition-all duration-300"
-              >
-                <span className="relative z-10 flex items-center">
-                  Get Started
-                  <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-accent-500 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </Button>
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  onClick={() => navigate('/auth')}
+                  className="group relative overflow-hidden bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-accent-500/25 transform transition-all duration-300"
+                >
+                  <span className="relative z-10 flex items-center">
+                    Start Journaling Now
+                    <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-accent-500 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </Button>
+              </motion.div>
               
-              <Button
-                onClick={() => window.open('#demo', '_blank')}
-                className="group flex items-center px-8 py-4 bg-white/60 backdrop-blur-sm hover:bg-white/80 text-gray-800 rounded-full text-lg font-semibold border border-white/40 hover:border-white/60 transition-all duration-300"
+              <ScrollLink
+                to="how-it-works"
+                smooth={true}
+                duration={500}
+                offset={-80}
               >
-                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mr-3 group-hover:bg-primary-50 transition-colors">
-                  <Play className="w-6 h-6 text-primary-600 ml-1" />
-                </div>
-                Watch Demo
-              </Button>
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button
+                    className="group flex items-center px-8 py-4 bg-white/60 backdrop-blur-sm hover:bg-white/80 text-gray-800 rounded-full text-lg font-semibold border border-white/40 hover:border-white/60 transition-all duration-300 cursor-pointer"
+                  >
+                    Learn How It Works
+                    <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </motion.div>
+              </ScrollLink>
             </div>
 
             {/* Scroll Indicator */}
-            <button 
-              onClick={scrollToFeatures}
-              className="animate-bounce hover:text-primary-700 transition-colors duration-300 text-gray-700"
-              aria-label="Scroll to features"
+            <ScrollLink
+              to="how-it-works"
+              smooth={true}
+              duration={500}
+              offset={-80}
             >
-              <ChevronDown className="w-8 h-8" />
-            </button>
-          </div>
+              <motion.button 
+                className="animate-bounce hover:text-primary-700 transition-colors duration-300 text-gray-700 cursor-pointer"
+                aria-label="Scroll to how it works"
+                whileHover={{ scale: 1.1 }}
+              >
+                <ChevronDown className="w-8 h-8" />
+              </motion.button>
+            </ScrollLink>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section id="how-it-works" className="py-32 bg-white">
+        <div className="container mx-auto px-6">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.3 }}
+            variants={containerVariants}
+            className="text-center mb-20"
+          >
+            <motion.h2 
+              variants={itemVariants}
+              className="text-4xl md:text-5xl font-bold text-gray-900 mb-6"
+            >
+              How It Works
+            </motion.h2>
+            <motion.p 
+              variants={itemVariants}
+              className="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed"
+            >
+              Three simple steps to transform your life with AI-powered insights
+            </motion.p>
+          </motion.div>
+
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.3 }}
+            variants={containerVariants}
+            className="grid lg:grid-cols-3 gap-12 max-w-6xl mx-auto"
+          >
+            {howItWorksSteps.map((step, index) => (
+              <motion.div
+                key={index}
+                variants={itemVariants}
+                className="relative"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.05, rotate: 5 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                  className="bg-gradient-to-br from-white to-gray-50 p-8 rounded-3xl shadow-lg hover:shadow-xl transition-shadow duration-300 border border-gray-100"
+                >
+                  {/* Step Number */}
+                  <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-r from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                    {step.step}
+                  </div>
+
+                  {/* Icon */}
+                  <div className="mb-6 flex justify-center">
+                    <motion.div 
+                      className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-50 to-accent-50 flex items-center justify-center"
+                      whileHover={{ rotate: 360 }}
+                      transition={{ duration: 0.6 }}
+                    >
+                      {step.icon}
+                    </motion.div>
+                  </div>
+
+                  {/* Content */}
+                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                    {step.title}
+                  </h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    {step.description}
+                  </p>
+                </motion.div>
+
+                {/* Connector Line */}
+                {index < howItWorksSteps.length - 1 && (
+                  <div className="hidden lg:block absolute top-1/2 -right-6 w-12 h-0.5 bg-gradient-to-r from-primary-300 to-accent-300"></div>
+                )}
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* CTA after How It Works */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.5 }}
+            className="text-center mt-16"
+          >
+            <Button
+              onClick={() => navigate('/auth')}
+              className="bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
+            >
+              Try It Free Today
+              <ArrowRight className="inline-block w-5 h-5 ml-2" />
+            </Button>
+          </motion.div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-32 bg-white">
+      <section id="features" className="py-32 bg-gradient-to-b from-gray-50 to-white">
         <div className="container mx-auto px-6">
-          <div className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.3 }}
+            variants={containerVariants}
+            className="text-center mb-20"
+          >
+            <motion.h2 
+              variants={itemVariants}
+              className="text-4xl md:text-5xl font-bold text-gray-900 mb-6"
+            >
               Beyond Traditional
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-accent-600"> Goal Setting</span>
-            </h2>
-            <p className="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed">
+            </motion.h2>
+            <motion.p 
+              variants={itemVariants}
+              className="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed"
+            >
               Experience the next generation of personal development tools, designed for those who refuse to settle for ordinary.
-            </p>
-          </div>
+            </motion.p>
+          </motion.div>
 
-          <div className="grid lg:grid-cols-3 gap-12">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={containerVariants}
+            className="grid lg:grid-cols-3 gap-12"
+          >
             {features.map((feature, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="group relative bg-gradient-to-br from-[#F5F5FA] to-white p-8 rounded-3xl shadow-soft hover:shadow-soft-lg transition-all duration-500 hover:-translate-y-2 border border-gray-100 backdrop-blur-sm"
+                variants={itemVariants}
+                whileHover={{ y: -10 }}
+                className="group relative bg-gradient-to-br from-[#F5F5FA] to-white p-8 rounded-3xl shadow-soft hover:shadow-soft-lg transition-all duration-500 border border-gray-100 backdrop-blur-sm"
               >
                 {/* Feature Icon */}
                 <div className="mb-8 flex justify-center">
-                  <div className="w-16 h-16 rounded-2xl bg-white shadow-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <motion.div 
+                    className="w-16 h-16 rounded-2xl bg-white shadow-lg flex items-center justify-center"
+                    whileHover={{ scale: 1.1, rotate: 5 }}
+                    transition={{ type: "spring", stiffness: 300 }}
+                  >
                     {feature.icon}
-                  </div>
+                  </motion.div>
                 </div>
 
                 {/* Feature Badge */}
@@ -184,36 +406,149 @@ export default function LandingPage() {
 
                 {/* Hover Effect */}
                 <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-accent-500/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* Trust Section */}
-      <section className="py-20 bg-gradient-to-r from-[#F5F5FA] to-[#E8E0F5]">
+      {/* Testimonials & Trust Section */}
+      <section id="testimonials" className="py-32 bg-gradient-to-r from-[#F5F5FA] to-[#E8E0F5]">
         <div className="container mx-auto px-6">
-          <div className="text-center mb-12">
-            <h3 className="text-2xl font-bold text-gray-900 mb-6">Trusted by Future Leaders</h3>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="space-y-2 text-center">
-              <div className="text-4xl font-bold text-primary-600">10,000+</div>
-              <div className="text-gray-700 font-medium">Dreams Transformed</div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.3 }}
+            variants={containerVariants}
+            className="text-center mb-20"
+          >
+            <motion.h2 
+              variants={itemVariants}
+              className="text-4xl md:text-5xl font-bold text-gray-900 mb-6"
+            >
+              Trusted by Thousands
+            </motion.h2>
+            <motion.p 
+              variants={itemVariants}
+              className="text-xl text-gray-700 max-w-3xl mx-auto leading-relaxed"
+            >
+              Join the community of achievers transforming their lives every day
+            </motion.p>
+          </motion.div>
+
+          {/* Testimonials Grid */}
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, amount: 0.2 }}
+            variants={containerVariants}
+            className="grid lg:grid-cols-3 gap-8 mb-20"
+          >
+            {testimonials.map((testimonial, index) => (
+              <motion.div
+                key={index}
+                variants={itemVariants}
+                whileHover={{ scale: 1.02 }}
+                className="bg-white p-8 rounded-2xl shadow-lg"
+              >
+                <div className="flex items-center mb-4">
+                  {/* Avatar */}
+                  <div className="w-12 h-12 bg-gradient-to-r from-primary-500 to-accent-500 rounded-full flex items-center justify-center text-white font-bold mr-4">
+                    {testimonial.avatar}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">{testimonial.name}</h4>
+                    <p className="text-sm text-gray-600">{testimonial.role}</p>
+                  </div>
+                </div>
+                
+                {/* Rating */}
+                <div className="flex mb-4">
+                  {[...Array(testimonial.rating)].map((_, i) => (
+                    <Star key={i} className="w-5 h-5 text-yellow-500 fill-current" />
+                  ))}
+                </div>
+
+                {/* Quote */}
+                <Quote className="w-8 h-8 text-gray-300 mb-2" />
+                <p className="text-gray-700 leading-relaxed italic">
+                  {testimonial.content}
+                </p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Trust Logos */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center"
+          >
+            <p className="text-sm text-gray-600 mb-8 uppercase tracking-wider">As Featured In</p>
+            <div className="flex flex-wrap justify-center items-center gap-12 opacity-50 grayscale">
+              {/* Placeholder logos */}
+              <div className="flex items-center space-x-2">
+                <Award className="w-8 h-8" />
+                <span className="font-bold text-xl">TechCrunch</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <TrendingUp className="w-8 h-8" />
+                <span className="font-bold text-xl">Forbes</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-8 h-8" />
+                <span className="font-bold text-xl">Product Hunt</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Brain className="w-8 h-8" />
+                <span className="font-bold text-xl">AI Weekly</span>
+              </div>
             </div>
-            <div className="space-y-2 text-center">
+          </motion.div>
+
+          {/* Stats */}
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={containerVariants}
+            className="grid md:grid-cols-3 gap-8 mt-20"
+          >
+            <motion.div 
+              variants={itemVariants}
+              className="space-y-2 text-center"
+              whileHover={{ scale: 1.05 }}
+            >
+              <div className="text-4xl font-bold text-primary-600">10,000+</div>
+              <div className="text-gray-700 font-medium">Active Users</div>
+            </motion.div>
+            <motion.div 
+              variants={itemVariants}
+              className="space-y-2 text-center"
+              whileHover={{ scale: 1.05 }}
+            >
               <div className="text-4xl font-bold text-accent-600">95%</div>
               <div className="text-gray-700 font-medium">Goal Achievement Rate</div>
-            </div>
-            <div className="space-y-2 text-center">
+            </motion.div>
+            <motion.div 
+              variants={itemVariants}
+              className="space-y-2 text-center"
+              whileHover={{ scale: 1.05 }}
+            >
               <div className="text-4xl font-bold text-purple-600">4.9/5</div>
               <div className="text-gray-700 font-medium">User Satisfaction</div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* Trust Indicators */}
-          <div className="mt-16 flex flex-col md:flex-row items-center justify-center gap-8 text-center">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.3 }}
+            className="mt-16 flex flex-col md:flex-row items-center justify-center gap-8 text-center"
+          >
             <div className="flex items-center space-x-3 text-gray-700">
               <Shield className="w-6 h-6 text-green-600" />
               <span className="font-medium">Enterprise-grade security & privacy</span>
@@ -226,13 +561,18 @@ export default function LandingPage() {
               <Check className="w-6 h-6 text-primary-600" />
               <span className="font-medium">Ethical AI development</span>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Final CTA Section */}
       <section className="py-32 bg-gradient-to-br from-gray-900 via-primary-900 to-accent-900 text-white">
-        <div className="container mx-auto px-6 text-center">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="container mx-auto px-6 text-center"
+        >
           <h2 className="text-4xl md:text-6xl font-bold mb-6">
             Your Future Starts
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-200 to-accent-200"> Today</span>
@@ -242,24 +582,28 @@ export default function LandingPage() {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-            <Button
-              onClick={() => navigate('/auth')}
-              className="bg-white text-gray-900 hover:bg-gray-100 px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-white/25 transform hover:scale-105 transition-all duration-300"
-            >
-              Begin Your Transformation
-            </Button>
-            <Button
-              onClick={() => navigate('/pricing')}
-              className="border-2 border-white/30 text-white hover:bg-white/10 px-10 py-4 rounded-full text-lg font-semibold transition-all duration-300"
-            >
-              View Pricing
-            </Button>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={() => navigate('/auth')}
+                className="bg-white text-gray-900 hover:bg-gray-100 px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-white/25 transform transition-all duration-300"
+              >
+                Begin Your Transformation
+              </Button>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Button
+                onClick={() => navigate('/pricing')}
+                className="border-2 border-white/30 text-white hover:bg-white/10 px-10 py-4 rounded-full text-lg font-semibold transition-all duration-300"
+              >
+                View Pricing
+              </Button>
+            </motion.div>
           </div>
 
           <div className="mt-12 text-sm text-gray-400">
             No credit card required • 30-day money-back guarantee • Cancel anytime
           </div>
-        </div>
+        </motion.div>
       </section>
     </main>
   );
