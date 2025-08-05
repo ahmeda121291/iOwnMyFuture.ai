@@ -8,12 +8,9 @@ import {
   Palette, 
   User, 
   Globe, 
-  Moon, 
-  Sun,
   AlertTriangle,
   Mail,
-  Smartphone,
-  Monitor
+  Smartphone
 } from 'lucide-react';
 import { getCurrentUser, supabase } from '../../core/api/supabase';
 import Button from '../../shared/components/Button';
@@ -448,31 +445,7 @@ export default function AccountSettings() {
           </div>
 
           <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Theme
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { value: 'light', label: 'Light', icon: <Sun className="w-4 h-4" /> },
-                  { value: 'dark', label: 'Dark', icon: <Moon className="w-4 h-4" /> },
-                  { value: 'system', label: 'System', icon: <Monitor className="w-4 h-4" /> }
-                ].map((theme) => (
-                  <button
-                    key={theme.value}
-                    onClick={() => updateNestedSetting('preferences', 'theme', theme.value)}
-                    className={`p-4 border rounded-lg text-center transition-all ${
-                      settings.preferences.theme === theme.value
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="flex justify-center mb-2">{theme.icon}</div>
-                    <div className="font-medium">{theme.label}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Dark mode toggle removed - feature not implemented */}
 
             <div className="grid md:grid-cols-2 gap-6">
               <div>

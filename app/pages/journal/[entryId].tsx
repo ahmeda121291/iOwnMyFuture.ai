@@ -7,7 +7,6 @@ import {
   Calendar, 
   Clock, 
   Brain,
-  Share,
   Download 
 } from 'lucide-react';
 import { getCurrentUser, supabase } from '../../core/api/supabase';
@@ -27,43 +26,44 @@ export default function JournalEntryPage() {
   const [regeneratingSummary, setRegeneratingSummary] = useState(false);
 
   useEffect(() => {
+    const loadEntry = async () => {
+      try {
+        const user = await getCurrentUser();
+        if (!user) {
+          navigate('/auth');
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from('journal_entries')
+          .select('*')
+          .eq('id', entryId)
+          .eq('user_id', user.id)
+          .single();
+
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // Entry not found
+            navigate('/journal');
+            return;
+          }
+          throw error;
+        }
+        setEntry(data);
+      } catch (error) {
+        console.error('Error loading entry:', error);
+        navigate('/journal');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
     if (entryId) {
       loadEntry();
     }
-  }, [entryId]);
+  }, [entryId, navigate]);
 
-  const loadEntry = async () => {
-    try {
-      const user = await getCurrentUser();
-      if (!user) {
-        navigate('/auth');
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('journal_entries')
-        .select('*')
-        .eq('id', entryId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // Entry not found
-          navigate('/journal');
-          return;
-        }
-        throw error;
-      }
-
-      setEntry(data);
-    } catch (error) {
-      console.error('Error loading entry:', error);
-      navigate('/journal');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // loadEntry function was moved inside useEffect
 
   const handleSave = async (content: string) => {
     try {

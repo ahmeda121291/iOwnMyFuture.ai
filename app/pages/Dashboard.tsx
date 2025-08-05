@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus, AlertCircle } from 'lucide-react';
-import { getCurrentUser, getUserSubscription, supabase } from '../core/api/supabase';
+import { getCurrentUser, getUserSubscription, supabase, getSession } from '../core/api/supabase';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
@@ -54,6 +54,13 @@ export default function DashboardPage() {
     try {
       setError(null);
       
+      // First check if we have a valid session
+      const session = await getSession();
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+      
       const userData = await getCurrentUser();
       if (!userData) {
         navigate('/auth');
@@ -61,35 +68,46 @@ export default function DashboardPage() {
       }
       setUser(userData);
 
+      // Fetch subscription data
       const subscriptionData = await getUserSubscription();
       setSubscription(subscriptionData);
 
-      // Fetch real metrics from Supabase
-      const [boardsResponse, entriesResponse] = await Promise.all([
-        supabase.from('moodboards').select('id').eq('user_id', userData.id),
-        supabase.from('journal_entries').select('id').eq('user_id', userData.id)
-      ]);
+      // Fetch real metrics from Supabase with proper error handling
+      try {
+        const [boardsResponse, entriesResponse] = await Promise.all([
+          supabase.from('moodboards').select('id').eq('user_id', userData.id),
+          supabase.from('journal_entries').select('id').eq('user_id', userData.id)
+        ]);
 
-      const boardCount = boardsResponse.data?.length || 0;
-      const entryCount = entriesResponse.data?.length || 0;
-      
-      // Calculate days active since account creation
-      const daysActive = Math.ceil(
-        (Date.now() - new Date(userData.created_at).getTime()) / MILLISECONDS_PER_DAY
-      );
-      
-      setMetrics({
-        boardCount,
-        entryCount,
-        daysActive
-      });
+        const boardCount = boardsResponse.data?.length || 0;
+        const entryCount = entriesResponse.data?.length || 0;
+        
+        // Calculate days active since account creation
+        const daysActive = Math.ceil(
+          (Date.now() - new Date(userData.created_at).getTime()) / MILLISECONDS_PER_DAY
+        );
+        
+        setMetrics({
+          boardCount,
+          entryCount,
+          daysActive
+        });
+      } catch (metricsError) {
+        // If metrics fail, still show the dashboard with default values
+        console.warn('Could not load metrics:', metricsError);
+        setMetrics({
+          boardCount: 0,
+          entryCount: 0,
+          daysActive: 0
+        });
+      }
       
     } catch (error) {
       console.error('Error loading user data:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load user data');
+      setError('Unable to load dashboard. Please try again.');
       
       // If auth error, redirect to auth page
-      if (error instanceof Error && error.message.includes('auth')) {
+      if (error instanceof Error && (error.message.includes('auth') || error.message.includes('session'))) {
         navigate('/auth');
       }
     } finally {

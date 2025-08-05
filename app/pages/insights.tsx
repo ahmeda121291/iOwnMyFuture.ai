@@ -7,12 +7,11 @@ import {
   BookOpen, 
   Award, 
   Brain, 
-  Download,
   RefreshCw,
   Heart,
   Zap
 } from 'lucide-react';
-import { getCurrentUser, supabase } from '../core/api/supabase';
+import { getCurrentUser, supabase, getSession } from '../core/api/supabase';
 import { generateInsightReport } from '../core/api/openai';
 import { type User, type JournalEntry } from '../core/types';
 import ProgressChartLazy from '../features/insights/ProgressChartLazy';
@@ -42,28 +41,30 @@ export default function InsightsPage() {
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'quarter'>('month');
   const navigate = useNavigate();
 
-  const initializePage = useCallback(async () => {
+  const generateAIInsights = useCallback(async (entries: JournalEntry[]) => {
+    if (generatingReport) {return;}
+    
+    setGeneratingReport(true);
     try {
-      const userData = await getCurrentUser();
-      if (!userData) {
-        navigate('/auth');
-        return;
+      const summaries = entries
+        .map(entry => entry.ai_summary)
+        .filter((summary): summary is string => Boolean(summary));
+      
+      if (summaries.length > 0) {
+        const report = await generateInsightReport(summaries);
+        setAiReport(report);
+      } else {
+        setAiReport("Start journaling regularly to get personalized AI insights about your progress and patterns!");
       }
-      setUser(userData);
-      await loadUserData(userData.id);
     } catch (error) {
-      console.error('Error loading user:', error);
-      navigate('/auth');
+      console.error('Error generating AI insights:', error);
+      setAiReport("Unable to generate insights at the moment. Please try again later.");
     } finally {
-      setLoading(false);
+      setGeneratingReport(false);
     }
-  }, [navigate, timeframe]);
+  }, [generatingReport]);
 
-  useEffect(() => {
-    initializePage();
-  }, [initializePage]);
-
-  const loadUserData = async (userId: string) => {
+  const loadUserData = useCallback(async (userId: string) => {
     try {
       const daysBack = timeframe === 'week' ? 7 : timeframe === 'month' ? 30 : 90;
       const cutoffDate = new Date();
@@ -97,30 +98,35 @@ export default function InsightsPage() {
     } catch (error) {
       console.error('Error loading user data:', error);
     }
-  };
+  }, [timeframe, generateAIInsights]);
 
-  const generateAIInsights = async (entries: JournalEntry[]) => {
-    if (generatingReport) {return;}
-    
-    setGeneratingReport(true);
+  const initializePage = useCallback(async () => {
     try {
-      const summaries = entries
-        .map(entry => entry.ai_summary)
-        .filter((summary): summary is string => Boolean(summary));
-      
-      if (summaries.length > 0) {
-        const report = await generateInsightReport(summaries);
-        setAiReport(report);
-      } else {
-        setAiReport("Start journaling regularly to get personalized AI insights about your progress and patterns!");
+      // First check if we have a valid session
+      const session = await getSession();
+      if (!session) {
+        navigate('/auth');
+        return;
       }
+      
+      const userData = await getCurrentUser();
+      if (!userData) {
+        navigate('/auth');
+        return;
+      }
+      setUser(userData);
+      await loadUserData(userData.id);
     } catch (error) {
-      console.error('Error generating AI insights:', error);
-      setAiReport("Unable to generate insights at the moment. Please try again later.");
+      console.error('Error loading user:', error);
+      navigate('/auth');
     } finally {
-      setGeneratingReport(false);
+      setLoading(false);
     }
-  };
+  }, [navigate, loadUserData]);
+
+  useEffect(() => {
+    initializePage();
+  }, [initializePage]);
 
   // Use analytics utilities for data processing
   const progressData = generateProgressData(journalEntries, moodboards, timeframe);
@@ -128,10 +134,11 @@ export default function InsightsPage() {
   const metrics = generateInsightMetrics(journalEntries, moodboards);
   const recommendations = generateRecommendations(journalEntries, metrics);
 
-  const exportReport = () => {
+  // Export functionality to be implemented
+  const _exportReport = () => {
     // TODO: Implement export functionality for PDF and CSV
     // For now, showing a toast would be better than alert
-    console.info('Export feature coming soon');
+    // console.info('Export feature coming soon');
   };
 
   if (loading) {

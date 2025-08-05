@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, Filter, Calendar, TrendingUp, Award, Target, ChevronLeft, ChevronRight } from 'lucide-react';
-import { getCurrentUser } from '../core/api/supabase';
+import { getCurrentUser, getSession } from '../core/api/supabase';
 import { summarizeJournalEntry } from '../core/api/openai';
 import { type User, type JournalEntry } from '../core/types';
 import { useJournalEntries, useCreateJournalEntry, useUpdateJournalEntry, useDeleteJournalEntry } from '../shared/hooks/queries/useJournalQueries';
@@ -70,6 +70,13 @@ export default function JournalPage() {
   // Initialize page
   const initializePage = useCallback(async () => {
     try {
+      // First check if we have a valid session
+      const session = await getSession();
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+      
       const userData = await getCurrentUser();
       if (!userData) {
         navigate('/auth');

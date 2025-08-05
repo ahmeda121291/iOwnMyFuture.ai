@@ -18,7 +18,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { Link as ScrollLink, animateScroll as scroll } from 'react-scroll';
+import { Link as ScrollLink } from 'react-scroll';
 import Button from '../shared/components/Button';
 import { getCurrentUser } from '../core/api/supabase';
 import { type User } from '../core/types';
@@ -47,7 +47,7 @@ interface Testimonial {
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const [isVisible, setIsVisible] = useState<boolean>(false);
+  const [_isVisible, setIsVisible] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {

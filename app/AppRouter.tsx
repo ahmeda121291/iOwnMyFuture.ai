@@ -25,14 +25,14 @@ import ShareSnapshot from './pages/ShareSnapshot';
 
 function AppRouter() {
   const [loading, setLoading] = useState(true);
-  const [sessionChecked, setSessionChecked] = useState(false);
+  const [_sessionChecked, setSessionChecked] = useState(false);
 
   useEffect(() => {
     // Check for existing session on mount
     const initializeAuth = async () => {
       try {
         // Get initial session
-        const session = await getSession();
+        const _session = await getSession();
         setSessionChecked(true);
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -44,7 +44,7 @@ function AppRouter() {
     initializeAuth();
 
     // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, _session) => {
       // Auth state changes are handled by individual components
       // This listener ensures we're aware of auth state changes globally
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {

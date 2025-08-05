@@ -13,7 +13,7 @@ import {
   ChevronRight,
   Search
 } from 'lucide-react';
-import { getCurrentUser } from '../core/api/supabase';
+import { getCurrentUser, getSession } from '../core/api/supabase';
 import { generateMoodboard, generateAdvancedMoodboard } from '../core/api/openai';
 import { updateOnboardingProgress } from '../core/api/onboarding';
 import { type User, type Moodboard, type MoodboardElement } from '../core/types';
@@ -79,6 +79,13 @@ export default function MoodboardPage() {
   // Initialize page
   const initializePage = useCallback(async () => {
     try {
+      // First check if we have a valid session
+      const session = await getSession();
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+      
       const userData = await getCurrentUser();
       if (!userData) {
         navigate('/auth');
