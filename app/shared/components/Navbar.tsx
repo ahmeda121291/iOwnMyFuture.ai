@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { LogOut, Menu, X, Home, DollarSign, Shield } from 'lucide-react'
+import { LogOut, Menu, X, Home, DollarSign, Shield, BookOpen, User as UserIcon, LayoutDashboard } from 'lucide-react'
 import { supabase, getCurrentUser, signOut, getSession } from '../../core/api/supabase'
 import { checkIsAdmin } from '../../core/api/admin'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { type User } from '../../core/types'
+import { errorTracker } from '../utils/errorTracking'
+import toast from 'react-hot-toast'
 
 export default function Navbar() {
   const [user, setUser] = useState<User | null>(null)
@@ -13,7 +15,7 @@ export default function Navbar() {
   const location = useLocation()
 
   useEffect(() => {
-    // Get initial user
+    // Get initial user from Supabase auth context
     const initializeUser = async () => {
       try {
         const session = await getSession();
@@ -25,11 +27,16 @@ export default function Navbar() {
             setIsAdmin(adminStatus);
           }
         } else {
+          // User is not authenticated (user == null)
           setUser(null);
           setIsAdmin(false);
         }
       } catch (error) {
-        console.error('Error initializing user in navbar:', error);
+        errorTracker.trackError(error, { 
+          component: 'Navbar', 
+          action: 'initializeUser' 
+        });
+        // On error, treat as unauthenticated
         setUser(null);
         setIsAdmin(false);
       }
@@ -37,15 +44,29 @@ export default function Navbar() {
 
     initializeUser();
 
-    // Listen for auth changes
+    // Listen for auth state changes (login/logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const userData = await getCurrentUser();
-        setUser(userData);
-        if (userData) {
-          checkIsAdmin(userData.id).then(setIsAdmin).catch(() => setIsAdmin(false));
+      try {
+        if (session?.user) {
+          // User logged in
+          const userData = await getCurrentUser();
+          setUser(userData);
+          if (userData) {
+            const adminStatus = await checkIsAdmin(userData.id);
+            setIsAdmin(adminStatus);
+          }
+        } else {
+          // User logged out (user == null)
+          setUser(null);
+          setIsAdmin(false);
         }
-      } else {
+      } catch (error) {
+        errorTracker.trackError(error, { 
+          component: 'Navbar', 
+          action: 'onAuthStateChange',
+          event 
+        });
+        // On error, treat as unauthenticated
         setUser(null);
         setIsAdmin(false);
       }
@@ -57,9 +78,14 @@ export default function Navbar() {
   const handleSignOut = async () => {
     try {
       await signOut()
+      toast.success('Signed out successfully')
       navigate('/')
     } catch (error) {
-      console.error('Error signing out:', error)
+      errorTracker.trackError(error, { 
+        component: 'Navbar', 
+        action: 'handleSignOut' 
+      })
+      toast.error('Failed to sign out. Please try again.')
     }
   }
 
@@ -90,19 +116,30 @@ export default function Navbar() {
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-1">
           {user ? (
+            // Authenticated user navigation
             <>
               <NavButton 
                 onClick={() => navigate('/dashboard')}
                 isActive={isActive('/dashboard')}
               >
+                <LayoutDashboard size={18} className="mr-1.5" />
                 Dashboard
               </NavButton>
               <NavButton 
                 onClick={() => navigate('/journal')}
                 isActive={isActive('/journal') || location.pathname.startsWith('/journal/')}
               >
+                <BookOpen size={18} className="mr-1.5" />
                 Journal
               </NavButton>
+              <NavButton 
+                onClick={() => navigate('/profile')}
+                isActive={isActive('/profile')}
+              >
+                <UserIcon size={18} className="mr-1.5" />
+                Profile
+              </NavButton>
+              {/* Additional navigation items for better UX */}
               <NavButton 
                 onClick={() => navigate('/moodboard')}
                 isActive={isActive('/moodboard')}
@@ -114,12 +151,6 @@ export default function Navbar() {
                 isActive={isActive('/insights')}
               >
                 Insights
-              </NavButton>
-              <NavButton 
-                onClick={() => navigate('/profile')}
-                isActive={isActive('/profile')}
-              >
-                Profile
               </NavButton>
               {isAdmin && (
                 <NavButton 
@@ -141,19 +172,20 @@ export default function Navbar() {
               </div>
             </>
           ) : (
+            // Public navigation (user == null)
             <>
               <NavButton 
                 onClick={() => navigate('/')}
                 isActive={isActive('/')}
               >
-                <Home size={18} className="mr-1" />
+                <Home size={18} className="mr-1.5" />
                 Home
               </NavButton>
               <NavButton 
                 onClick={() => navigate('/pricing')}
                 isActive={isActive('/pricing')}
               >
-                <DollarSign size={18} className="mr-1" />
+                <DollarSign size={18} className="mr-1.5" />
                 Pricing
               </NavButton>
               <button 
@@ -180,19 +212,30 @@ export default function Navbar() {
         <div className="md:hidden bg-white/95 backdrop-blur-md border-t border-primary/10 shadow-lg">
           <div className="container mx-auto px-4 py-4">
             {user ? (
+              // Authenticated user mobile navigation
               <div className="space-y-1">
                 <MobileNavButton 
                   onClick={() => { navigate('/dashboard'); setIsMenuOpen(false) }}
                   isActive={isActive('/dashboard')}
                 >
+                  <LayoutDashboard size={18} className="mr-2" />
                   Dashboard
                 </MobileNavButton>
                 <MobileNavButton 
                   onClick={() => { navigate('/journal'); setIsMenuOpen(false) }}
                   isActive={isActive('/journal') || location.pathname.startsWith('/journal/')}
                 >
+                  <BookOpen size={18} className="mr-2" />
                   Journal
                 </MobileNavButton>
+                <MobileNavButton 
+                  onClick={() => { navigate('/profile'); setIsMenuOpen(false) }}
+                  isActive={isActive('/profile')}
+                >
+                  <UserIcon size={18} className="mr-2" />
+                  Profile
+                </MobileNavButton>
+                {/* Additional navigation items for better UX */}
                 <MobileNavButton 
                   onClick={() => { navigate('/moodboard'); setIsMenuOpen(false) }}
                   isActive={isActive('/moodboard')}
@@ -204,12 +247,6 @@ export default function Navbar() {
                   isActive={isActive('/insights')}
                 >
                   Insights
-                </MobileNavButton>
-                <MobileNavButton 
-                  onClick={() => { navigate('/profile'); setIsMenuOpen(false) }}
-                  isActive={isActive('/profile')}
-                >
-                  Profile
                 </MobileNavButton>
                 {isAdmin && (
                   <MobileNavButton 
@@ -231,6 +268,7 @@ export default function Navbar() {
                 </div>
               </div>
             ) : (
+              // Public mobile navigation (user == null)
               <div className="space-y-1">
                 <MobileNavButton 
                   onClick={() => { navigate('/'); setIsMenuOpen(false) }}
