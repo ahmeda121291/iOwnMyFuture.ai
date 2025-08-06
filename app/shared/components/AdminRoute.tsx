@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { getCurrentUser, supabase } from '../../core/api/supabase';
 import Loader from './Loader';
@@ -11,12 +11,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  useEffect(() => {
-    checkAdminAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const checkAdminAccess = async () => {
+  const checkAdminAccess = useCallback(async () => {
     try {
       const user = await getCurrentUser();
       if (!user) {
@@ -39,7 +34,11 @@ export default function AdminRoute({ children }: AdminRouteProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    checkAdminAccess();
+  }, [checkAdminAccess]);
 
   if (loading) {
     return (

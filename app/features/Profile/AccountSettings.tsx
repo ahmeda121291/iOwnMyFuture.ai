@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Save, 
   Eye, 
@@ -77,12 +77,7 @@ export default function AccountSettings() {
     }
   });
 
-  useEffect(() => {
-    loadUserSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadUserSettings = async () => {
+  const loadUserSettings = useCallback(async () => {
     try {
       const userData = await getCurrentUser();
       if (!userData) {return;}
@@ -115,7 +110,11 @@ export default function AccountSettings() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadUserSettings();
+  }, [loadUserSettings]);
 
   const handleSave = async () => {
     setSaving(true);

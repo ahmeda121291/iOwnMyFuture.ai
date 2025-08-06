@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getSession, getUserSubscription } from '../../core/api/supabase';
@@ -30,10 +30,9 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
   const navigate = useNavigate();
   const [isProActive, setIsProActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [subscription, setSubscription] = useState<{ subscription_status: string; price_id: string; cancel_at_period_end: boolean } | null>(null);
 
-  useEffect(() => {
-    const checkProAccess = async () => {
+  const checkProAccess = useCallback(async () => {
       try {
         // First check if user is authenticated
         const session = await getSession();
@@ -90,11 +89,11 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
       } finally {
         setIsLoading(false);
       }
-    };
+  }, [navigate, redirectTo, showToast, toastMessage]);
 
+  useEffect(() => {
     checkProAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [checkProAccess]);
 
   return {
     isProActive,

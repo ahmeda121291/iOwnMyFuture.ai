@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import { supabase } from '../core/api/supabase';
 import { type PublicSnapshot } from '../core/types';
@@ -11,14 +11,7 @@ export default function ShareSnapshot() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (id) {
-      loadSnapshot(id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  const loadSnapshot = async (snapshotId: string) => {
+  const loadSnapshot = useCallback(async (snapshotId: string) => {
     try {
       // First increment the view count
       await supabase.rpc('increment_snapshot_views', { snapshot_id: snapshotId });
@@ -51,7 +44,13 @@ export default function ShareSnapshot() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (id) {
+      loadSnapshot(id);
+    }
+  }, [id, loadSnapshot]);
 
   if (loading) {
     return (

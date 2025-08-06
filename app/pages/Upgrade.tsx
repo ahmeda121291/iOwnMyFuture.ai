@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Sparkles, 
@@ -25,12 +25,7 @@ export default function UpgradePage() {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
 
-  useEffect(() => {
-    checkAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const checkAccess = async () => {
+  const checkAccess = useCallback(async () => {
     try {
       const session = await getSession();
       
@@ -61,7 +56,11 @@ export default function UpgradePage() {
     } finally {
       setCheckingSubscription(false);
     }
-  };
+  }, [navigate]);
+
+  useEffect(() => {
+    checkAccess();
+  }, [checkAccess]);
 
   const handleUpgrade = async (priceId: string) => {
     if (!user) {

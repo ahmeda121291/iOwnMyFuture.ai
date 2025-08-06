@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -72,11 +72,24 @@ export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    checkAdminAccess();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const loadAdminStats = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      const { data, error: statsError } = await supabase.functions.invoke('admin-stats');
 
-  const checkAdminAccess = async () => {
+      if (statsError) {throw statsError;}
+
+      setStats(data);
+    } catch (err) {
+      console.error('Error loading admin stats:', err);
+      setError('Failed to load admin statistics.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  const checkAdminAccess = useCallback(async () => {
     try {
       const user = await getCurrentUser();
       if (!user) {
@@ -104,24 +117,12 @@ export default function AdminPage() {
       setError('Failed to verify admin access.');
       setLoading(false);
     }
-  };
+  }, [navigate, loadAdminStats]);
 
-  const loadAdminStats = async () => {
-    try {
-      setRefreshing(true);
-      const { data, error: statsError } = await supabase.functions.invoke('admin-stats');
+  useEffect(() => {
+    checkAdminAccess();
+  }, [checkAdminAccess]);
 
-      if (statsError) {throw statsError;}
-
-      setStats(data);
-    } catch (err) {
-      console.error('Error loading admin stats:', err);
-      setError('Failed to load admin statistics.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {

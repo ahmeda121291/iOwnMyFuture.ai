@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Instagram, 
   Twitter, 
@@ -58,12 +58,7 @@ export default function SocialConnections() {
   const [copyingLink, setCopyingLink] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
 
-  useEffect(() => {
-    loadConnections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadConnections = async () => {
+  const loadConnections = useCallback(async () => {
     try {
       const user = await getCurrentUser();
       if (!user) {return;}
@@ -80,7 +75,11 @@ export default function SocialConnections() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadConnections();
+  }, [loadConnections]);
 
   const handleConnect = async (serviceId: string) => {
     setConnecting(serviceId);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Brain, 
   TrendingUp, 
@@ -49,12 +49,7 @@ export default function MoodAnalyticsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadMoodAnalytics();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadMoodAnalytics = async () => {
+  const loadMoodAnalytics = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -70,7 +65,11 @@ export default function MoodAnalyticsPanel() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadMoodAnalytics();
+  }, [loadMoodAnalytics]);
 
   const getMoodEmoji = (mood: string) => {
     const moodEmojis: Record<string, string> = {

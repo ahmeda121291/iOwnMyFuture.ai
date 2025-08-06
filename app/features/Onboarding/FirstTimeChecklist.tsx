@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   CheckCircle2, 
   Circle, 
@@ -37,12 +37,7 @@ export default function FirstTimeChecklist() {
   const [isDismissed, setIsDismissed] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    loadProgress();
-    checkUserActivity();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadProgress = async () => {
+  const loadProgress = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {return;}
@@ -85,9 +80,9 @@ export default function FirstTimeChecklist() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const checkUserActivity = async () => {
+  const checkUserActivity = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {return;}
@@ -138,7 +133,12 @@ export default function FirstTimeChecklist() {
     } catch (error) {
       console.error('Error checking user activity:', error);
     }
-  };
+  }, [progress]);
+
+  useEffect(() => {
+    loadProgress();
+    checkUserActivity();
+  }, [loadProgress, checkUserActivity]);
 
   const updateProgress = async (updates: Partial<OnboardingProgress>) => {
     try {
