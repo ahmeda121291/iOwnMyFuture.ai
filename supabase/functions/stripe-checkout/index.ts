@@ -27,11 +27,7 @@ const CheckoutRequestSchema = z.object({
   success_url: z.string().url('Invalid success URL'),
   cancel_url: z.string().url('Invalid cancel URL'),
   mode: z.enum(['payment', 'subscription']),
-  csrf_token: Deno.env.get('ENVIRONMENT') === 'production' 
-    ? z.string().min(32, 'CSRF token required')
-    : z.string().optional(), // CSRF optional in dev
-  user_id: z.string().optional(), // Optional, will use authenticated user if not provided
-  email: z.string().email().optional(), // Optional email override
+  csrf_token: z.string().min(1, 'CSRF token required'), // Always require some token
 });
 
 // Helper to build CORS responses
@@ -107,16 +103,9 @@ Deno.serve(async (req) => {
       return corsResponse({ error: `Validation error: ${errorMessage}` }, 400);
     }
 
-    const { price_id, success_url, cancel_url, mode, user_id, email } = validationResult.data;
+    const { price_id, success_url, cancel_url, mode, csrf_token } = validationResult.data;
     
-    // Validate that userId from request matches authenticated user if provided
-    if (user_id && user_id !== user.id) {
-      console.error(`[stripe-checkout] User ID mismatch: request=${user_id}, auth=${user.id}`);
-      return corsResponse({ error: 'Unauthorized: user ID mismatch' }, 403);
-    }
-    
-    // Use provided email or fall back to user's email
-    const customerEmail = email || user.email;
+    console.log(`[stripe-checkout] Processing request for user: ${user.email}`);
 
     const { data: customer, error: getCustomerError } = await supabase
       .from('stripe_customers')
@@ -174,7 +163,7 @@ Deno.serve(async (req) => {
     // Create Stripe customer mapping if none exists
     if (!customer || !customer.customer_id) {
       const newCustomer = await stripe.customers.create({
-        email: customerEmail || user.email,
+        email: user.email,
         metadata: { userId: user.id },
       });
 

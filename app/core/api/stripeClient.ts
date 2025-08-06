@@ -44,15 +44,14 @@ export default getStripe;
 
 interface CreateCheckoutSessionOptions {
   priceId: string;
-  userId?: string;
-  email?: string;
+  mode?: 'subscription' | 'payment';
   successUrl?: string;
   cancelUrl?: string;
-  mode?: 'subscription' | 'payment';
+  csrfToken?: string;
 }
 
 export const createCheckoutSession = async (options: CreateCheckoutSessionOptions | string) => {
-  // Handle legacy string parameter
+  // Handle legacy string parameter or full options
   let params: CreateCheckoutSessionOptions;
   if (typeof options === 'string') {
     params = {
@@ -70,7 +69,6 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     };
   }
 
-  // Always log for debugging payment issues
   console.log('[stripeClient] Creating checkout session with params:', params);
 
   const { data: { session } } = await supabase.auth.getSession();
@@ -82,60 +80,54 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
 
   console.log('[stripeClient] Auth session found, user:', session.user?.email);
 
-  // Get CSRF token (optional in dev)
-  let csrfToken = '';
+  // Get CSRF token if not provided
+  let csrfToken = params.csrfToken || '';
   
-  if (import.meta.env.MODE === 'production') {
-    // In production, CSRF is required
-    const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
-    
-    console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
+  if (!csrfToken) {
+    try {
+      const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
+      console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
 
-    const csrfResponse = await fetch(csrfTokenUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
-        'content-type': 'application/json',
-      },
-    });
-
-    console.log('[stripeClient] CSRF response status:', csrfResponse.status);
-
-    if (!csrfResponse.ok) {
-      const errorText = await csrfResponse.text();
-      console.error('[stripeClient] CSRF token fetch failed:', {
-        status: csrfResponse.status,
-        statusText: csrfResponse.statusText,
-        error: errorText
+      const csrfResponse = await fetch(csrfTokenUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
       });
-      throw new Error(`Failed to get CSRF token: ${csrfResponse.status} ${errorText}`);
-    }
 
-    const csrfData = await csrfResponse.json();
-    csrfToken = csrfData.csrf_token;
-    
-    if (!csrfToken) {
-      console.error('[stripeClient] CSRF token missing in response:', csrfData);
-      throw new Error('CSRF token not found in response');
+      if (!csrfResponse.ok) {
+        const errorText = await csrfResponse.text();
+        console.error('[stripeClient] CSRF token fetch failed:', errorText);
+        // Don't fail if CSRF fails in dev
+        if (import.meta.env.MODE === 'production') {
+          throw new Error(`Failed to get CSRF token: ${csrfResponse.status}`);
+        } else {
+          csrfToken = 'dev-mode-no-csrf';
+        }
+      } else {
+        const csrfData = await csrfResponse.json();
+        csrfToken = csrfData.csrf_token || 'dev-mode-no-csrf';
+        console.log('[stripeClient] CSRF token obtained');
+      }
+    } catch (error) {
+      console.error('[stripeClient] CSRF token error:', error);
+      if (import.meta.env.MODE === 'production') {
+        throw error;
+      } else {
+        csrfToken = 'dev-mode-no-csrf';
+      }
     }
-
-    console.log('[stripeClient] CSRF token obtained successfully');
-  } else {
-    console.log('[stripeClient] Skipping CSRF token in development mode');
-    csrfToken = 'dev-mode-no-csrf'; // Placeholder for dev
   }
 
-  // Now create the checkout session with CSRF token
+  // Create the checkout session
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`;
   
   const requestBody = {
     price_id: params.priceId,
-    mode: params.mode,
-    success_url: params.successUrl,
-    cancel_url: params.cancelUrl,
-    user_id: params.userId || session.user?.id,
-    email: params.email || session.user?.email,
+    mode: params.mode || 'subscription',
+    success_url: params.successUrl || `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: params.cancelUrl || `${window.location.origin}/pricing`,
     csrf_token: csrfToken,
   };
 
@@ -146,8 +138,7 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${session.access_token}`,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      'content-type': 'application/json',
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(requestBody),
   });
@@ -161,21 +152,21 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     } catch {
       errorData = { error: await response.text() };
     }
-    console.error('[stripeClient] Checkout session creation failed:', {
-      status: response.status,
-      statusText: response.statusText,
-      error: errorData
-    });
+    console.error('[stripeClient] Checkout session creation failed:', errorData);
     throw new Error(errorData.error || `Failed to create checkout session (${response.status})`);
   }
 
   const result = await response.json();
   
-  console.log('[stripeClient] Checkout session created successfully:', {
-    sessionId: result.sessionId,
-    hasUrl: !!result.url,
-    urlPrefix: result.url ? result.url.substring(0, 50) + '...' : 'N/A'
-  });
+  console.log('[stripeClient] Checkout session created successfully:', result);
+
+  // Redirect to Stripe checkout
+  if (result.url) {
+    console.log('[stripeClient] Redirecting to:', result.url.substring(0, 50) + '...');
+    window.location.href = result.url;
+  } else {
+    throw new Error('No checkout URL received from server');
+  }
 
   return result;
 };

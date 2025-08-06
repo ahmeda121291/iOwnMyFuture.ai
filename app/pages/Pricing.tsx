@@ -40,27 +40,34 @@ export default function PricingPage() {
 
       console.log('[Pricing] Starting checkout for price:', priceId);
       
-      // Create checkout session
-      const response = await createCheckoutSession({
+      // Update loading message
+      toast.loading('Connecting to payment processor...', { id: loadingToast });
+      
+      // Create checkout session - function handles CSRF internally and redirects
+      await createCheckoutSession({
         priceId,
         mode: 'subscription',
         successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${window.location.origin}/pricing`
       });
 
-      if (!response?.url) {
-        throw new Error('No checkout URL received');
-      }
-
+      // If we get here, redirect didn't happen - show success message
       toast.dismiss(loadingToast);
       toast.success('Redirecting to checkout...');
-      
-      // Redirect to Stripe
-      window.location.href = response.url;
     } catch (error) {
-      console.error('Error creating checkout session:', error);
+      console.error('[Pricing] Checkout Error:', error);
       toast.dismiss(loadingToast);
-      toast.error('Unable to start checkout. Please try again.');
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorMessage.includes('authenticated')) {
+        toast.error('Please sign in to continue');
+        navigate('/auth');
+      } else if (errorMessage.includes('CSRF')) {
+        toast.error('Session expired. Please refresh and try again.');
+      } else {
+        toast.error('Unable to start checkout. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

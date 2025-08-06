@@ -101,46 +101,12 @@ export default function UpgradePage() {
       // Update loading message
       toast.loading('Connecting to payment processor...', { id: loadingToast });
 
-      // Create Stripe checkout session via Edge Function
-      const response = await createCheckoutSession(checkoutParams);
+      // Create Stripe checkout session - function handles CSRF and redirects
+      await createCheckoutSession(checkoutParams);
 
-      // Dev logging
-      console.log('[Upgrade] Checkout session response:', response);
-
-      // Validate response
-      if (!response || typeof response !== 'object') {
-        console.error('[Upgrade] Invalid response structure:', response);
-        throw new Error('Invalid response from checkout service');
-      }
-
-      const { url, sessionId } = response;
-
-      if (!url) {
-        console.error('[Upgrade] Response missing URL:', response);
-        throw new Error('No checkout URL received from Stripe');
-      }
-
-      if (!sessionId) {
-        console.error('[Upgrade] Response missing session ID:', response);
-        throw new Error('No session ID received from Stripe');
-      }
-
-      // Store session for verification
-      sessionStorage.setItem('checkoutSessionId', sessionId);
-      
-      // Update loading message
-      toast.loading('Redirecting to secure checkout...', { id: loadingToast });
-      
-      // Dev logging
-      console.log('[Upgrade] Redirecting to Stripe checkout URL:', url);
-
-      // Small delay to show the message
-      setTimeout(() => {
-        // Dismiss loading toast before redirect
-        toast.dismiss(loadingToast);
-        // Redirect to Stripe Checkout
-        window.location.href = url;
-      }, 500);
+      // If we get here, redirect didn't happen
+      toast.dismiss(loadingToast);
+      toast.success('Redirecting to checkout...');
     } catch (error) {
       // Log full error details
       console.error('[Upgrade] Full checkout error:', error);
