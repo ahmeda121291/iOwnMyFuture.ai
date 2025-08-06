@@ -196,6 +196,10 @@ export default function UpgradePage() {
     { icon: <Zap className="w-5 h-5" />, text: "24/7 Customer Support" }
   ];
 
+  // Price IDs from Stripe - TODO: Fetch dynamically from stripe-prices Edge Function
+  const MONTHLY_PRICE_ID = 'price_1QS0uQRqrkWBY7xJQnRLMhvL';
+  const YEARLY_PRICE_ID = 'price_1QS0vnRqrkWBY7xJP77VQkUP';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1]">
       <div className="container mx-auto px-4 py-12">
@@ -230,7 +234,7 @@ export default function UpgradePage() {
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Monthly Pro</h2>
               <div className="flex items-baseline">
-                <span className="text-5xl font-bold text-gray-900">$18</span>
+                <span className="text-5xl font-bold text-gray-900">$15</span>
                 <span className="text-gray-600 ml-2">/month</span>
               </div>
               <p className="text-gray-600 mt-2">Perfect for trying out the platform</p>
@@ -250,7 +254,7 @@ export default function UpgradePage() {
             <Button
               onClick={() => {
                 console.log('[Upgrade] Monthly plan button clicked');
-                handleUpgrade('price_1QS0uQRqrkWBY7xJQnRLMhvL');
+                handleUpgrade(MONTHLY_PRICE_ID);
               }}
               disabled={loading}
               className="w-full bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center"
@@ -292,7 +296,7 @@ export default function UpgradePage() {
               </div>
               <p className="text-gray-600 mt-2">
                 <span className="line-through text-gray-400">$216</span>
-                <span className="text-green-600 font-semibold ml-2">Save 17%</span>
+                <span className="text-green-600 font-semibold ml-2">Save $36/year</span>
               </p>
             </div>
 
@@ -310,7 +314,7 @@ export default function UpgradePage() {
             <Button
               onClick={() => {
                 console.log('[Upgrade] Annual plan button clicked');
-                handleUpgrade('price_1QS0vnRqrkWBY7xJP77VQkUP');
+                handleUpgrade(YEARLY_PRICE_ID);
               }}
               disabled={loading}
               className="w-full bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 text-white py-3 rounded-lg font-semibold flex items-center justify-center shadow-lg"

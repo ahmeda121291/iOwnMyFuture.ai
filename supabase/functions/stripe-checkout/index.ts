@@ -27,7 +27,9 @@ const CheckoutRequestSchema = z.object({
   success_url: z.string().url('Invalid success URL'),
   cancel_url: z.string().url('Invalid cancel URL'),
   mode: z.enum(['payment', 'subscription']),
-  csrf_token: z.string().min(32, 'CSRF token required'),
+  csrf_token: Deno.env.get('ENVIRONMENT') === 'production' 
+    ? z.string().min(32, 'CSRF token required')
+    : z.string().optional(), // CSRF optional in dev
   user_id: z.string().optional(), // Optional, will use authenticated user if not provided
   email: z.string().email().optional(), // Optional email override
 });
@@ -67,8 +69,14 @@ Deno.serve(async (req) => {
 
     console.log('[stripe-checkout] Authenticating user and validating CSRF...');
     
+    // Skip CSRF in development mode for easier testing
+    const requireCSRF = Deno.env.get('ENVIRONMENT') === 'production';
+    
     // Authenticate and validate CSRF token
-    const authResult = await authenticateAndValidateCSRF(req, { corsHeaders });
+    const authResult = await authenticateAndValidateCSRF(req, { 
+      corsHeaders,
+      requireCSRF 
+    });
     if (!authResult.success) {
       console.error('[stripe-checkout] Auth/CSRF validation failed');
       return authResult.response!;

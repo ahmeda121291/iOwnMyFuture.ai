@@ -1,50 +1,85 @@
 import React, { useState } from 'react';
 import { Check, Shield, Clock, ArrowRight, Sparkles, Target, Brain, BarChart3, HeadphonesIcon } from 'lucide-react';
 import { createCheckoutSession } from '../core/api/stripeClient';
+import { useNavigate } from 'react-router-dom';
+import { getCurrentUser } from '../core/api/supabase';
+import toast from 'react-hot-toast';
 
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   // Update page meta tags
   React.useEffect(() => {
-    document.title = 'Pricing - iOwnMyFuture.ai | Transform Your Life with AI'
+    document.title = 'Pricing - MyFutureSelf.ai | Transform Your Life with AI'
     const metaDescription = document.querySelector('meta[name="description"]')
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'Choose the Pro plan that fits your journey. Monthly at $18 or yearly at $180 (save $36). Unlimited AI vision boards, smart journaling, and progress analytics.')
+      metaDescription.setAttribute('content', 'Choose the Pro plan that fits your journey. Monthly at $15 or yearly at $180 (save $36). Unlimited AI vision boards, smart journaling, and progress analytics.')
     } else {
       const meta = document.createElement('meta')
       meta.name = 'description'
-      meta.content = 'Choose the Pro plan that fits your journey. Monthly at $18 or yearly at $180 (save $36). Unlimited AI vision boards, smart journaling, and progress analytics.'
+      meta.content = 'Choose the Pro plan that fits your journey. Monthly at $15 or yearly at $180 (save $36). Unlimited AI vision boards, smart journaling, and progress analytics.'
       document.head.appendChild(meta)
     }
   }, []);
 
   const handleChoosePlan = async (priceId: string) => {
     setLoading(true);
+    const loadingToast = toast.loading('Preparing checkout...');
+    
     try {
-      await createCheckoutSession(priceId);
+      // Check if user is logged in
+      const user = await getCurrentUser();
+      if (!user) {
+        toast.dismiss(loadingToast);
+        toast.error('Please sign in to continue');
+        navigate('/auth');
+        return;
+      }
+
+      console.log('[Pricing] Starting checkout for price:', priceId);
+      
+      // Create checkout session
+      const response = await createCheckoutSession({
+        priceId,
+        mode: 'subscription',
+        successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${window.location.origin}/pricing`
+      });
+
+      if (!response?.url) {
+        throw new Error('No checkout URL received');
+      }
+
+      toast.dismiss(loadingToast);
+      toast.success('Redirecting to checkout...');
+      
+      // Redirect to Stripe
+      window.location.href = response.url;
     } catch (error) {
       console.error('Error creating checkout session:', error);
-      alert('Something went wrong. Please try again.');
+      toast.dismiss(loadingToast);
+      toast.error('Unable to start checkout. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const features = [
-    'Unlimited AI Vision Boards',
-    'AI Journaling Prompts & Summaries', 
-    'Progress Analytics & Charts',
-    'Daily Affirmations & Quotes',
-    'Priority Support',
-    'Data Export & Backup',
-    'Mobile App Access',
-    'Advanced Goal Tracking'
+    'AI-Powered Vision Boards',
+    'Smart Journaling with AI Insights',
+    'Goal Tracking & Achievement',
+    'Progress Analytics & Reports',
+    'Personalized Recommendations',
+    'Mobile & Desktop Access',
+    'Cloud Sync & Backup',
+    '24/7 Customer Support'
   ];
 
-  const monthlyPriceId = 'price_1RqEjnEwnX1Z4pWbM32uVqWK'; // $18/month
-  const yearlyPriceId = 'price_1RqEk8EwnX1Z4pWbxLPMDaGk'; // $180/year
+  // Same price IDs as in Upgrade.tsx - TODO: Fetch from Stripe API
+  const monthlyPriceId = 'price_1QS0uQRqrkWBY7xJQnRLMhvL'; // $15/month
+  const yearlyPriceId = 'price_1QS0vnRqrkWBY7xJP77VQkUP'; // $180/year
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1] pt-20">
@@ -112,10 +147,10 @@ export default function PricingPage() {
               <h3 className="text-3xl font-bold text-gray-900 mb-2">Pro</h3>
               <div className="mb-4">
                 <span className="text-6xl font-bold text-gray-900">
-                  ${billingCycle === 'yearly' ? '15' : '18'}
+                  ${billingCycle === 'monthly' ? '15' : '180'}
                 </span>
                 <span className="text-xl text-gray-600 ml-1">
-                  /month
+                  /{billingCycle === 'monthly' ? 'month' : 'year'}
                 </span>
               </div>
               {billingCycle === 'yearly' && (

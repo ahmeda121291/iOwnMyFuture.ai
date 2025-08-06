@@ -31,14 +31,14 @@ const PricingCard = React.memo(function PricingCard({ product, isPopular = false
         return;
       }
       
-      // Dev logging
-      if (import.meta.env.MODE !== 'production') {
-        console.log('[PricingCard] Starting checkout for:', {
-          priceId: product.priceId,
-          userId: user.id,
-          mode: product.mode
-        });
-      }
+      // Always log for debugging payment issues
+      console.log('[PricingCard] Starting checkout for:', {
+        priceId: product.priceId,
+        productId: product.productId,
+        userId: user.id,
+        mode: product.mode,
+        price: product.price
+      });
       
       // Create checkout session via Edge Function
       const response = await createCheckoutSession({

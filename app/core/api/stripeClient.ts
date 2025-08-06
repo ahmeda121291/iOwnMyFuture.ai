@@ -82,41 +82,49 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
 
   console.log('[stripeClient] Auth session found, user:', session.user?.email);
 
-  // First, get a CSRF token
-  const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
+  // Get CSRF token (optional in dev)
+  let csrfToken = '';
   
-  console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
+  if (import.meta.env.MODE === 'production') {
+    // In production, CSRF is required
+    const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
+    
+    console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
 
-  const csrfResponse = await fetch(csrfTokenUrl, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      'content-type': 'application/json',
-    },
-  });
-
-  console.log('[stripeClient] CSRF response status:', csrfResponse.status);
-
-  if (!csrfResponse.ok) {
-    const errorText = await csrfResponse.text();
-    console.error('[stripeClient] CSRF token fetch failed:', {
-      status: csrfResponse.status,
-      statusText: csrfResponse.statusText,
-      error: errorText
+    const csrfResponse = await fetch(csrfTokenUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        // eslint-disable-next-line @typescript-eslint/naming-convention
+        'content-type': 'application/json',
+      },
     });
-    throw new Error(`Failed to get CSRF token: ${csrfResponse.status} ${errorText}`);
-  }
 
-  const csrfData = await csrfResponse.json();
-  const csrfToken = csrfData.csrf_token;
-  
-  if (!csrfToken) {
-    console.error('[stripeClient] CSRF token missing in response:', csrfData);
-    throw new Error('CSRF token not found in response');
-  }
+    console.log('[stripeClient] CSRF response status:', csrfResponse.status);
 
-  console.log('[stripeClient] CSRF token obtained successfully');
+    if (!csrfResponse.ok) {
+      const errorText = await csrfResponse.text();
+      console.error('[stripeClient] CSRF token fetch failed:', {
+        status: csrfResponse.status,
+        statusText: csrfResponse.statusText,
+        error: errorText
+      });
+      throw new Error(`Failed to get CSRF token: ${csrfResponse.status} ${errorText}`);
+    }
+
+    const csrfData = await csrfResponse.json();
+    csrfToken = csrfData.csrf_token;
+    
+    if (!csrfToken) {
+      console.error('[stripeClient] CSRF token missing in response:', csrfData);
+      throw new Error('CSRF token not found in response');
+    }
+
+    console.log('[stripeClient] CSRF token obtained successfully');
+  } else {
+    console.log('[stripeClient] Skipping CSRF token in development mode');
+    csrfToken = 'dev-mode-no-csrf'; // Placeholder for dev
+  }
 
   // Now create the checkout session with CSRF token
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`;
