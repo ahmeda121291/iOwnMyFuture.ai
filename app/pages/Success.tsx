@@ -26,10 +26,11 @@ interface SessionDetails {
 }
 
 export default function SuccessPage() {
-  // Use Pro plan check hook - don't redirect on success page
+  // Use Pro plan check hook - don't redirect on success page since payment was just made
   const { user } = useRequireProPlan({ 
     redirectTo: '/upgrade',
-    showToast: false // Don't show toast on success page
+    showToast: false, // Don't show toast on success page
+    skipRedirect: true // Don't auto-redirect from success page
   });
   
   const [searchParams] = useSearchParams();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getSession, getUserSubscription } from '../../core/api/supabase';
 import { errorTracker } from '../utils/errorTracking';
@@ -9,6 +9,7 @@ interface UseRequireProPlanOptions {
   redirectTo?: string;
   showToast?: boolean;
   toastMessage?: string;
+  skipRedirect?: boolean; // Option to skip automatic redirect
 }
 
 interface UseRequireProPlanResult {
@@ -19,19 +20,31 @@ interface UseRequireProPlanResult {
   checkProAccess: () => Promise<void>;
 }
 
+// Pages that should not trigger Pro requirement redirects
+const ALLOWED_PAGES = [
+  '/upgrade',
+  '/pricing',
+  '/success',
+  '/auth',
+  '/stripe-checkout',
+  '/',  // Landing page
+];
+
 /**
  * Hook to enforce Pro-only access
  * Checks if the current user has an active Pro subscription
- * Redirects to pricing page if not
+ * Redirects to pricing page if not (except on allowed pages)
  */
 export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRequireProPlanResult {
   const {
     redirectTo = '/upgrade',
     showToast = true,
-    toastMessage = 'MyFutureSelf is a Pro-only platform. Subscribe to unlock all features.'
+    toastMessage = 'MyFutureSelf is a Pro-only platform. Subscribe to unlock all features.',
+    skipRedirect = false
   } = options;
   
   const navigate = useNavigate();
+  const location = useLocation();
   const [isProActive, setIsProActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [subscription, setSubscription] = useState<{ subscription_status: string; price_id: string; cancel_at_period_end: boolean } | null>(null);
@@ -43,7 +56,11 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
         const session = await getSession();
         
         if (!session) {
-          navigate('/auth');
+          // Not logged in - redirect to auth unless on allowed page
+          if (!ALLOWED_PAGES.some(page => location.pathname.startsWith(page))) {
+            navigate('/auth');
+          }
+          setIsLoading(false);
           return;
         }
 
@@ -62,9 +79,12 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
         
         setIsProActive(hasProAccess);
         
-        if (!hasProAccess) {
+        // Check if we should redirect for non-Pro users
+        const isOnAllowedPage = ALLOWED_PAGES.some(page => location.pathname.startsWith(page));
+        
+        if (!hasProAccess && !isOnAllowedPage && !skipRedirect) {
           // Store the intended destination for after upgrade
-          sessionStorage.setItem('redirectAfterUpgrade', window.location.pathname);
+          sessionStorage.setItem('redirectAfterUpgrade', location.pathname);
           
           // Check if this is a new user (created within last 5 minutes)
           const userCreatedAt = new Date(session.user.created_at || Date.now());
@@ -88,19 +108,24 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
       } catch (error) {
         errorTracker.trackError(error, {
           component: 'useRequireProPlan',
-          action: 'checkProAccess'
+          action: 'checkProAccess',
+          pathname: location.pathname
         });
         setIsProActive(false);
         
-        if (showToast) {
-          toast.error('Unable to verify subscription status');
-        }
+        // Only redirect on error if not on allowed page
+        const isOnAllowedPage = ALLOWED_PAGES.some(page => location.pathname.startsWith(page));
         
-        navigate(redirectTo);
+        if (!isOnAllowedPage && !skipRedirect) {
+          if (showToast) {
+            toast.error('Unable to verify subscription status');
+          }
+          navigate(redirectTo);
+        }
       } finally {
         setIsLoading(false);
       }
-  }, [navigate, redirectTo, showToast, toastMessage]);
+  }, [navigate, redirectTo, showToast, toastMessage, location.pathname, skipRedirect]);
 
   useEffect(() => {
     checkProAccess();
