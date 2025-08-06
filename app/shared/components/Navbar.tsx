@@ -322,8 +322,52 @@ export default function Navbar() {
   const isLandingPage = location.pathname === '/'
   
   // Determine if we should show logo
-  // Show logo when: user is logged in OR not on landing page
-  const showLogo = user || !isLandingPage
+  // Show logo when: not on landing page
+  const showLogo = !isLandingPage
+
+  // SPECIAL CASE: Logged in user on landing page - show minimal nav
+  if (user && isLandingPage) {
+    return (
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-primary/10 shadow-sm">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
+          {/* No logo on landing page */}
+          <div />
+          
+          {/* Simple enter dashboard button */}
+          <div className="flex items-center space-x-3">
+            <button 
+              onClick={() => navigate('/dashboard')}
+              className="px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-full font-medium hover:shadow-lg transition-all duration-200"
+            >
+              Enter Dashboard
+            </button>
+          </div>
+
+          {/* Mobile: Same simple button */}
+          {isMenuOpen && (
+            <div className="md:hidden bg-white/95 backdrop-blur-md border-t border-primary/10 shadow-lg">
+              <div className="container mx-auto px-4 py-4">
+                <button 
+                  onClick={() => { navigate('/dashboard'); setIsMenuOpen(false) }}
+                  className="w-full px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-full font-medium"
+                >
+                  Enter Dashboard
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile Menu Button */}
+          <button 
+            className="md:hidden p-2 rounded-lg hover:bg-primary/10 transition-colors"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          >
+            {isMenuOpen ? <X size={24} className="text-accent" /> : <Menu size={24} className="text-accent" />}
+          </button>
+        </div>
+      </nav>
+    )
+  }
 
   // Clean conditional rendering based on user state
   if (user === null) {
@@ -367,11 +411,11 @@ export default function Navbar() {
     )
   }
 
-  // PRIVATE NAVIGATION (Logged in)
+  // PRIVATE NAVIGATION (Logged in and NOT on landing page)
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-primary/10 shadow-sm">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-        {/* Logo - Always show when logged in */}
+        {/* Logo - Always show when logged in and not on landing page */}
         <div 
           className="flex items-center space-x-3 cursor-pointer group"
           onClick={() => navigate('/dashboard')}
