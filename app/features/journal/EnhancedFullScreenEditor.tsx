@@ -235,7 +235,9 @@ export default function EnhancedFullScreenEditor({
   }, [content, existingEntry?.content]);
 
   const handleAutoSave = async () => {
-    if (!content.trim()) return;
+    if (!content.trim()) {
+      return;
+    }
     
     try {
       setAutoSaved(false);
