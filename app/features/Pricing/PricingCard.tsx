@@ -97,12 +97,12 @@ const PricingCard = React.memo(function PricingCard({ product, isPopular = false
     }
   };
 
-  // Memoize static features array and price formatting
+  // Unified features array shared across all pricing displays
   const features = useMemo(() => [
     'AI-Powered Vision Boards',
-    'Smart Journaling with AI Summaries',
-    'Progress Analytics & Insights',
-    'Goal Tracking & Reminders',
+    'Smart Journaling with AI Insights',
+    'Goal Tracking & Achievement',
+    'Progress Analytics & Reports',
     'Personalized Recommendations',
     'Mobile & Desktop Access',
     'Cloud Sync & Backup',

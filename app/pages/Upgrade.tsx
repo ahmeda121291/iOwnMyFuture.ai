@@ -163,13 +163,16 @@ export default function UpgradePage() {
     );
   }
 
+  // Unified features list for both monthly and yearly plans
   const features = [
     { icon: <Brain className="w-5 h-5" />, text: "AI-Powered Vision Boards" },
     { icon: <BookOpen className="w-5 h-5" />, text: "Smart Journaling with AI Insights" },
     { icon: <Target className="w-5 h-5" />, text: "Goal Tracking & Achievement" },
     { icon: <TrendingUp className="w-5 h-5" />, text: "Progress Analytics & Reports" },
-    { icon: <Sparkles className="w-5 h-5" />, text: "Daily Motivation & Prompts" },
-    { icon: <Shield className="w-5 h-5" />, text: "Secure & Private Data Storage" }
+    { icon: <Sparkles className="w-5 h-5" />, text: "Personalized Recommendations" },
+    { icon: <Shield className="w-5 h-5" />, text: "Mobile & Desktop Access" },
+    { icon: <Lock className="w-5 h-5" />, text: "Cloud Sync & Backup" },
+    { icon: <Zap className="w-5 h-5" />, text: "24/7 Customer Support" }
   ];
 
   return (
@@ -213,7 +216,7 @@ export default function UpgradePage() {
             </div>
 
             <ul className="space-y-4 mb-8">
-              {features.slice(0, 4).map((feature, index) => (
+              {features.map((feature, index) => (
                 <li key={index} className="flex items-center">
                   <div className="flex-shrink-0 w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mr-3">
                     <Check className="w-4 h-4 text-green-600" />
