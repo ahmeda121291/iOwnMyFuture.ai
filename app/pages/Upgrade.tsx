@@ -18,6 +18,7 @@ import { createCheckoutSession } from '../core/api/stripeClient';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import toast from 'react-hot-toast';
+import { errorTracker } from '../shared/utils/errorTracking';
 
 export default function UpgradePage() {
   const navigate = useNavigate();
@@ -70,29 +71,38 @@ export default function UpgradePage() {
     }
 
     setLoading(true);
+    toast.loading('Redirecting to checkout...');
     
     try {
       // Get the redirect URL after successful payment
       const redirectAfterUpgrade = sessionStorage.getItem('redirectAfterUpgrade') || '/dashboard';
       
-      // Create Stripe checkout session
-      const { url } = await createCheckoutSession({
+      // Create Stripe checkout session via Edge Function
+      const { url, sessionId } = await createCheckoutSession({
         priceId,
         userId: user.id,
         email: user.email,
         successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(redirectAfterUpgrade)}`,
-        cancelUrl: `${window.location.origin}/upgrade`
+        cancelUrl: `${window.location.origin}/upgrade`,
+        mode: 'subscription'
       });
 
       if (url) {
-        // Redirect to Stripe Checkout
+        // Store session for verification
+        sessionStorage.setItem('checkoutSessionId', sessionId);
+        // Redirect immediately to Stripe Checkout
         window.location.href = url;
       } else {
-        throw new Error('Failed to create checkout session');
+        throw new Error('No checkout URL received');
       }
     } catch (error) {
-      console.error('Error creating checkout session:', error);
-      toast.error('Failed to start checkout process. Please try again.');
+      errorTracker.trackError(error, {
+        component: 'Upgrade',
+        action: 'handleUpgrade',
+        priceId
+      });
+      toast.dismiss();
+      toast.error('Failed to start checkout. Please try again.');
       setLoading(false);
     }
   };
