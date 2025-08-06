@@ -20,9 +20,10 @@ import {
 import { motion } from 'framer-motion';
 import { Link as ScrollLink } from 'react-scroll';
 import Button from '../shared/components/Button';
-import { getCurrentUser } from '../core/api/supabase';
-import { getRedirectPath } from '../shared/utils/navigation';
+import { getCurrentUser, getSession } from '../core/api/supabase';
 import { type User } from '../core/types';
+import { errorTracker } from '../shared/utils/errorTracking';
+import toast from 'react-hot-toast';
 
 interface Feature {
   icon: React.ReactNode;
@@ -50,16 +51,33 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [_isVisible, setIsVisible] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
 
   useEffect(() => {
     setIsVisible(true);
     
-    // Check authentication status
-    getCurrentUser().then(userData => {
-      setUser(userData);
-    }).catch(() => {
-      setUser(null);
-    });
+    // Check authentication status using session
+    const checkAuth = async () => {
+      try {
+        const session = await getSession();
+        if (session) {
+          const userData = await getCurrentUser();
+          setUser(userData);
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        errorTracker.trackError(error, {
+          component: 'LandingPage',
+          action: 'checkAuth'
+        });
+        setUser(null);
+      } finally {
+        setIsAuthChecking(false);
+      }
+    };
+    
+    checkAuth();
     
     // Update page meta tags
     document.title = 'iOwnMyFuture.ai - Unlock Your Future with AI-Powered Vision Boards';
@@ -74,10 +92,32 @@ export default function LandingPage() {
     }
   }, []);
 
-  // Smart CTA handler - routes based on auth and subscription status
+  // Smart CTA handler - routes based on auth status
   const handleStartJournaling = async () => {
-    const redirectPath = await getRedirectPath();
-    navigate(redirectPath);
+    try {
+      // Wait for auth check to complete
+      if (isAuthChecking) {
+        toast.loading('Checking authentication...');
+        return;
+      }
+      
+      // Check current session state
+      const session = await getSession();
+      
+      if (session && user) {
+        // User is logged in - go to journal
+        navigate('/journal');
+      } else {
+        // User is not logged in - redirect to auth
+        navigate('/auth');
+      }
+    } catch (error) {
+      errorTracker.trackError(error, {
+        component: 'LandingPage',
+        action: 'handleStartJournaling'
+      });
+      toast.error('Navigation failed. Please try again.');
+    }
   };
 
   const features: Feature[] = [
@@ -218,10 +258,11 @@ export default function LandingPage() {
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
                   onClick={handleStartJournaling}
-                  className="group relative overflow-hidden bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-accent-500/25 transform transition-all duration-300"
+                  disabled={isAuthChecking}
+                  className="group relative overflow-hidden bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-accent-500/25 transform transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="relative z-10 flex items-center">
-                    {user ? 'Go to Journal' : 'Start Journaling Now'}
+                    {isAuthChecking ? 'Loading...' : user ? 'Go to Journal' : 'Start Journaling Now'}
                     <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                   </span>
                   <div className="absolute inset-0 bg-gradient-to-r from-accent-500 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -349,9 +390,10 @@ export default function LandingPage() {
           >
             <Button
               onClick={handleStartJournaling}
-              className="bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300"
+              disabled={isAuthChecking}
+              className="bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {user ? 'Continue Journaling' : 'Try It Free Today'}
+              {isAuthChecking ? 'Loading...' : user ? 'Continue Journaling' : 'Try It Free Today'}
               <ArrowRight className="inline-block w-5 h-5 ml-2" />
             </Button>
           </motion.div>
@@ -602,16 +644,28 @@ export default function LandingPage() {
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
                 onClick={handleStartJournaling}
-                className="bg-white text-gray-900 hover:bg-gray-100 px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-white/25 transform transition-all duration-300"
+                disabled={isAuthChecking}
+                className="bg-white text-gray-900 hover:bg-gray-100 px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-white/25 transform transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {user ? 'Continue Your Journey' : 'Begin Your Transformation'}
+                {isAuthChecking ? 'Loading...' : user ? 'Continue Your Journey' : 'Begin Your Transformation'}
               </Button>
             </motion.div>
             {!user && (
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Button
-                  onClick={() => navigate('/pricing')}
-                  className="border-2 border-white/30 text-white hover:bg-white/10 px-10 py-4 rounded-full text-lg font-semibold transition-all duration-300"
+                  onClick={() => {
+                    try {
+                      navigate('/pricing');
+                    } catch (error) {
+                      errorTracker.trackError(error, {
+                        component: 'LandingPage',
+                        action: 'navigateToPricing'
+                      });
+                      toast.error('Navigation failed. Please try again.');
+                    }
+                  }}
+                  disabled={isAuthChecking}
+                  className="border-2 border-white/30 text-white hover:bg-white/10 px-10 py-4 rounded-full text-lg font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   View Pricing
                 </Button>
