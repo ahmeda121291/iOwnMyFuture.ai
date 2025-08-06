@@ -105,8 +105,8 @@ export default function LandingPage() {
       const session = await getSession();
       
       if (session && user) {
-        // User is logged in - go to journal
-        navigate('/journal');
+        // User is logged in - go to dashboard
+        navigate('/dashboard');
       } else {
         // User is not logged in - redirect to auth
         navigate('/auth');
@@ -262,7 +262,7 @@ export default function LandingPage() {
                   className="group relative overflow-hidden bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-accent-500/25 transform transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span className="relative z-10 flex items-center">
-                    {isAuthChecking ? 'Loading...' : user ? 'Go to Journal' : 'Start Journaling Now'}
+                    {isAuthChecking ? 'Loading...' : user ? 'Enter Dashboard' : 'Start Journaling Now'}
                     <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                   </span>
                   <div className="absolute inset-0 bg-gradient-to-r from-accent-500 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
