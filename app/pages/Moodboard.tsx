@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   Palette, 
   Save, 
@@ -13,12 +12,12 @@ import {
   ChevronRight,
   Search
 } from 'lucide-react';
-import { getCurrentUser, getSession } from '../core/api/supabase';
+import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import { generateMoodboard, generateAdvancedMoodboard } from '../core/api/openai';
 import { updateOnboardingProgress } from '../core/api/onboarding';
 import toast from 'react-hot-toast';
 import { errorTracker } from '../shared/utils/errorTracking';
-import { type User, type Moodboard, type MoodboardElement } from '../core/types';
+import { type Moodboard, type MoodboardElement } from '../core/types';
 import { 
   useMoodboards, 
   useMoodboard, 
@@ -40,8 +39,10 @@ const MoodboardCanvas = lazy(() => import('../features/moodboard/MoodboardCanvas
 const PAGE_SIZE = 9; // 3x3 grid
 
 export default function MoodboardPage() {
+  // Use Pro plan check hook
+  const { isLoading: proLoading, user } = useRequireProPlan();
+  
   // State
-  const [user, setUser] = useState<User | null>(null);
   const [currentMoodboardId, setCurrentMoodboardId] = useState<string | null>(null);
   const [elements, setElements] = useState<MoodboardElement[]>([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -53,7 +54,6 @@ export default function MoodboardPage() {
   const [generatingAI, setGeneratingAI] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const navigate = useNavigate();
 
   // React Query hooks - only query when user is available
   const { 
@@ -82,30 +82,6 @@ export default function MoodboardPage() {
   const deleteMutation = useDeleteMoodboard();
   const shareMutation = useShareMoodboard();
 
-  // Initialize page
-  const initializePage = useCallback(async () => {
-    try {
-      // First check if we have a valid session with user ID
-      const session = await getSession();
-      if (!session || !session.user?.id) {
-        navigate('/auth');
-        return;
-      }
-      
-      const userData = await getCurrentUser();
-      if (!userData) {
-        navigate('/auth');
-        return;
-      }
-      setUser(userData);
-    } catch (_error) {
-      navigate('/auth');
-    }
-  }, [navigate]);
-
-  useEffect(() => {
-    initializePage();
-  }, [initializePage]);
 
   // Load current moodboard when moodboards data changes
   useEffect(() => {
@@ -246,10 +222,13 @@ export default function MoodboardPage() {
   }, []);
 
   // Loading state
-  if (!user || moodboardsLoading) {
+  if (!user || proLoading || moodboardsLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader size="large" />
+      <div className="min-h-screen bg-background flex items-center justify-center pt-20">
+        <div className="text-center">
+          <Loader size="large" />
+          <p className="mt-4 text-text-secondary">Loading your vision boards...</p>
+        </div>
       </div>
     );
   }
@@ -268,18 +247,6 @@ export default function MoodboardPage() {
 
   const moodboards = moodboardsData?.data || [];
   const totalPages = moodboardsData?.totalPages || 1;
-
-  // Show loading state while user is being loaded
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center pt-20">
-        <div className="text-center">
-          <Loader size="large" />
-          <p className="mt-4 text-text-secondary">Loading your vision boards...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background pt-20">

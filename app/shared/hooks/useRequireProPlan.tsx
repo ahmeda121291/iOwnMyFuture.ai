@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getSession, getUserSubscription } from '../../core/api/supabase';
+import { errorTracker } from '../utils/errorTracking';
+import Loader from '../components/Loader';
 
 interface UseRequireProPlanOptions {
   redirectTo?: string;
@@ -83,7 +85,11 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
           // Redirect to upgrade page
           navigate(redirectTo);
         }
-      } catch (_error) {
+      } catch (error) {
+        errorTracker.trackError(error, {
+          component: 'useRequireProPlan',
+          action: 'checkProAccess'
+        });
         setIsProActive(false);
         
         if (showToast) {
@@ -121,8 +127,11 @@ export function withProPlan<P extends object>(
     
     if (isLoading) {
       return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="min-h-screen flex items-center justify-center bg-background pt-20">
+          <div className="text-center">
+            <Loader size="large" />
+            <p className="mt-4 text-text-secondary">Verifying subscription...</p>
+          </div>
         </div>
       );
     }
@@ -130,10 +139,10 @@ export function withProPlan<P extends object>(
     if (!isProActive) {
       // Show loading while redirecting
       return (
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center bg-background pt-20">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-text-secondary">Redirecting...</p>
+            <Loader size="large" />
+            <p className="mt-4 text-text-secondary">Redirecting to upgrade...</p>
           </div>
         </div>
       );
