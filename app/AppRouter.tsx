@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { supabase, getSession } from './core/api/supabase';
 
 // Components
 import ErrorBoundary from './shared/components/ErrorBoundary';
-import PrivateRoute from './shared/components/PrivateRoute';
+import ProOnlyRoute from './shared/components/ProOnlyRoute';
 import AdminRoute from './shared/components/AdminRoute';
 import AppLayout from './shared/components/AppLayout';
 import Loader from './shared/components/Loader';
@@ -97,53 +97,53 @@ function AppRouter() {
             {/* Public Share Route */}
             <Route path="/share/:id" element={<ShareSnapshot />} />
 
-            {/* Protected Routes */}
+            {/* Protected Routes - Pro Only */}
             <Route path="/dashboard" element={
-              <PrivateRoute>
+              <ProOnlyRoute>
                 <AppLayout>
                   <DashboardPage />
                 </AppLayout>
-              </PrivateRoute>
+              </ProOnlyRoute>
             } />
 
             <Route path="/journal" element={
-              <PrivateRoute>
+              <ProOnlyRoute>
                 <AppLayout>
                   <JournalPage />
                 </AppLayout>
-              </PrivateRoute>
+              </ProOnlyRoute>
             } />
 
             <Route path="/journal/:entryId" element={
-              <PrivateRoute>
+              <ProOnlyRoute>
                 <AppLayout>
                   <JournalEntryPage />
                 </AppLayout>
-              </PrivateRoute>
+              </ProOnlyRoute>
             } />
 
             <Route path="/moodboard" element={
-              <PrivateRoute>
+              <ProOnlyRoute>
                 <AppLayout>
                   <MoodboardPage />
                 </AppLayout>
-              </PrivateRoute>
+              </ProOnlyRoute>
             } />
 
             <Route path="/insights" element={
-              <PrivateRoute>
+              <ProOnlyRoute>
                 <AppLayout>
                   <InsightsPage />
                 </AppLayout>
-              </PrivateRoute>
+              </ProOnlyRoute>
             } />
 
             <Route path="/profile" element={
-              <PrivateRoute>
+              <ProOnlyRoute>
                 <AppLayout>
                   <ProfilePage />
                 </AppLayout>
-              </PrivateRoute>
+              </ProOnlyRoute>
             } />
 
             {/* Admin Route */}

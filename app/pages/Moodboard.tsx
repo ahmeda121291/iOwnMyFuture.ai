@@ -53,7 +53,7 @@ export default function MoodboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
-  // React Query hooks
+  // React Query hooks - only query when user is available
   const { 
     data: moodboardsData, 
     isLoading: moodboardsLoading,
@@ -64,12 +64,16 @@ export default function MoodboardPage() {
     page: currentPage,
     pageSize: PAGE_SIZE,
     searchQuery,
+  }, {
+    enabled: !!user?.id // Only run query when we have a user ID
   });
 
   const { 
     data: currentMoodboard,
     isLoading: currentMoodboardLoading
-  } = useMoodboard(currentMoodboardId || '');
+  } = useMoodboard(currentMoodboardId || '', {
+    enabled: !!currentMoodboardId // Only query when we have a moodboard ID
+  });
 
   const createMutation = useCreateMoodboard();
   const updateElementsMutation = useUpdateMoodboardElements();
@@ -79,9 +83,9 @@ export default function MoodboardPage() {
   // Initialize page
   const initializePage = useCallback(async () => {
     try {
-      // First check if we have a valid session
+      // First check if we have a valid session with user ID
       const session = await getSession();
-      if (!session) {
+      if (!session || !session.user?.id) {
         navigate('/auth');
         return;
       }
@@ -92,8 +96,7 @@ export default function MoodboardPage() {
         return;
       }
       setUser(userData);
-    } catch (error) {
-      console.error('Error loading user:', error);
+    } catch (_error) {
       navigate('/auth');
     }
   }, [navigate]);
@@ -263,6 +266,18 @@ export default function MoodboardPage() {
 
   const moodboards = moodboardsData?.data || [];
   const totalPages = moodboardsData?.totalPages || 1;
+
+  // Show loading state while user is being loaded
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center pt-20">
+        <div className="text-center">
+          <Loader size="large" />
+          <p className="mt-4 text-text-secondary">Loading your vision boards...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pt-20">

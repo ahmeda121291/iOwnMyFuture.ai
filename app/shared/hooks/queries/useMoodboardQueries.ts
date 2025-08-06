@@ -158,19 +158,20 @@ async function shareMoodboard(id: string, isPublic: boolean): Promise<{ shareUrl
 }
 
 // Hooks
-export function useMoodboards(filters: MoodboardFilters) {
+export function useMoodboards(filters: MoodboardFilters, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: moodboardKeys.list(filters),
     queryFn: () => fetchMoodboards(filters),
+    enabled: options?.enabled !== false && !!filters.userId, // Only query when userId is present
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }
 
-export function useMoodboard(id: string) {
+export function useMoodboard(id: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: moodboardKeys.detail(id),
     queryFn: () => fetchMoodboard(id),
-    enabled: !!id,
+    enabled: options?.enabled !== false && !!id,
   });
 }
 

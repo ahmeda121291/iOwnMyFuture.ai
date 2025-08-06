@@ -133,10 +133,11 @@ async function deleteJournalEntry(id: string): Promise<void> {
 }
 
 // Hooks
-export function useJournalEntries(filters: JournalFilters) {
+export function useJournalEntries(filters: JournalFilters, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: journalKeys.list(filters),
     queryFn: () => fetchJournalEntries(filters),
+    enabled: options?.enabled !== false && !!filters.userId, // Only query when userId is present
     staleTime: 1000 * 60 * 2, // 2 minutes
   });
 }

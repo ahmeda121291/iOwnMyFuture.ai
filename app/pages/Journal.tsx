@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, Filter, Calendar, TrendingUp, Award, Target, ChevronLeft, ChevronRight } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getCurrentUser, getSession } from '../core/api/supabase';
 import { summarizeJournalEntry } from '../core/api/openai';
 import { type User, type JournalEntry } from '../core/types';
 import { useJournalEntries, useCreateJournalEntry, useUpdateJournalEntry, useDeleteJournalEntry } from '../shared/hooks/queries/useJournalQueries';
 import JournalCalendar from '../features/journal/JournalCalendar';
 import JournalEntryForm from '../features/journal/JournalEntryForm';
-import FullScreenEditor from '../features/journal/FullScreenEditor';
+import EnhancedFullScreenEditor from '../features/journal/EnhancedFullScreenEditor';
 import EntrySummaryCard from '../features/journal/EntrySummaryCard';
 import JournalPrompt from '../features/journal/JournalPrompt';
 import Button from '../shared/components/Button';
@@ -51,7 +52,7 @@ export default function JournalPage() {
     return {};
   }, [selectedDate, filterMode]);
 
-  // React Query hooks
+  // React Query hooks - only query when user is available
   const { 
     data: entriesData, 
     isLoading: entriesLoading,
@@ -63,6 +64,8 @@ export default function JournalPage() {
     pageSize: PAGE_SIZE,
     searchQuery,
     ...dateRange,
+  }, {
+    enabled: !!user?.id // Only run query when we have a user ID
   });
 
   const createMutation = useCreateJournalEntry();
@@ -72,9 +75,9 @@ export default function JournalPage() {
   // Initialize page
   const initializePage = useCallback(async () => {
     try {
-      // First check if we have a valid session
+      // First check if we have a valid session with user ID
       const session = await getSession();
-      if (!session) {
+      if (!session || !session.user?.id) {
         navigate('/auth');
         return;
       }
@@ -85,8 +88,7 @@ export default function JournalPage() {
         return;
       }
       setUser(userData);
-    } catch (error) {
-      console.error('Error loading user:', error);
+    } catch (_error) {
       navigate('/auth');
     }
   }, [navigate]);
@@ -175,7 +177,7 @@ export default function JournalPage() {
           try {
             await summarizeJournalEntry(newEntry.id, content);
             await refetchEntries();
-          } catch (error) {
+          } catch (_error) {
             console.error('Error generating summary:', error);
           }
         }
@@ -183,9 +185,8 @@ export default function JournalPage() {
 
       setShowEntryForm(false);
       setEditingEntry(null);
-    } catch (error) {
-      console.error('Error saving entry:', error);
-      alert('Failed to save entry. Please try again.');
+    } catch (_error) {
+      toast.error('Failed to save entry. Please try again.');
     }
   }, [user, selectedDate, editingEntry, createMutation, updateMutation, refetchEntries]);
 
@@ -195,9 +196,8 @@ export default function JournalPage() {
     try {
       await deleteMutation.mutateAsync(entry.id);
       setViewingEntry(null);
-    } catch (error) {
-      console.error('Error deleting entry:', error);
-      alert('Failed to delete entry. Please try again.');
+    } catch (_error) {
+      toast.error('Failed to delete entry. Please try again.');
     }
   }, [deleteMutation]);
 
@@ -253,6 +253,18 @@ export default function JournalPage() {
     return entryDate.getMonth() === selectedDate.getMonth() && 
            entryDate.getFullYear() === selectedDate.getFullYear();
   }).length;
+
+  // Show loading state while user is being loaded
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center pt-20">
+        <div className="text-center">
+          <Loader size="large" />
+          <p className="mt-4 text-text-secondary">Loading your journal...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pt-20">
@@ -532,8 +544,8 @@ export default function JournalPage() {
         </Modal>
       )}
 
-      {/* Full Screen Editor */}
-      <FullScreenEditor
+      {/* Enhanced Full Screen Editor */}
+      <EnhancedFullScreenEditor
         isOpen={showFullScreenEditor}
         onClose={() => {
           setShowFullScreenEditor(false);

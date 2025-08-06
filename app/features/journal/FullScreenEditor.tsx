@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import toast from 'react-hot-toast';
@@ -9,7 +9,6 @@ import {
   Calendar, 
   Clock, 
   Hash,
-  ChevronLeft,
   Loader,
   CheckCircle
 } from 'lucide-react';
@@ -105,10 +104,13 @@ export default function FullScreenEditor({
         clearTimeout(autoSaveTimerRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
 
   const handleAutoSave = async () => {
-    if (!content.trim()) return;
+    if (!content.trim()) {
+      return;
+    }
     
     try {
       setAutoSaved(false);
@@ -146,7 +148,9 @@ export default function FullScreenEditor({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-white">

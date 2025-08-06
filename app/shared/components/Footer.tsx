@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Heart, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getActiveSocialLinks } from '../../config/socials';
+import { getCurrentUser } from '../../core/api/supabase';
+import { type User } from '../../core/types';
 
 interface SocialButtonProps {
   href: string;
@@ -17,6 +19,15 @@ interface FooterLinkProps {
 export default function Footer() {
   const navigate = useNavigate();
   const activeSocials = getActiveSocialLinks();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    getCurrentUser().then(userData => {
+      setUser(userData);
+    }).catch(() => {
+      setUser(null);
+    });
+  }, []);
 
   return (
     <footer className="bg-gradient-to-r from-background to-primary/5 border-t border-primary/10 py-12 mt-16">
@@ -63,9 +74,18 @@ export default function Footer() {
           <div>
             <h3 className="text-lg font-semibold text-text-primary mb-4">Quick Links</h3>
             <div className="space-y-3">
-              <FooterLink onClick={() => navigate('/')}>Home</FooterLink>
-              <FooterLink onClick={() => navigate('/pricing')}>Pricing</FooterLink>
-              <FooterLink onClick={() => navigate('/auth')}>Get Started</FooterLink>
+              {user ? (
+                <>
+                  <FooterLink onClick={() => navigate('/dashboard')}>Dashboard</FooterLink>
+                  <FooterLink onClick={() => navigate('/profile')}>Profile</FooterLink>
+                </>
+              ) : (
+                <>
+                  <FooterLink onClick={() => navigate('/')}>Home</FooterLink>
+                  <FooterLink onClick={() => navigate('/pricing')}>Pricing</FooterLink>
+                  <FooterLink onClick={() => navigate('/auth')}>Get Started</FooterLink>
+                </>
+              )}
             </div>
           </div>
 

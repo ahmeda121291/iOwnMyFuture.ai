@@ -609,19 +609,23 @@ export default function LandingPage() {
                 {user ? 'Continue Your Journey' : 'Begin Your Transformation'}
               </Button>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                onClick={() => navigate('/pricing')}
-                className="border-2 border-white/30 text-white hover:bg-white/10 px-10 py-4 rounded-full text-lg font-semibold transition-all duration-300"
-              >
-                View Pricing
-              </Button>
-            </motion.div>
+            {!user && (
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Button
+                  onClick={() => navigate('/pricing')}
+                  className="border-2 border-white/30 text-white hover:bg-white/10 px-10 py-4 rounded-full text-lg font-semibold transition-all duration-300"
+                >
+                  View Pricing
+                </Button>
+              </motion.div>
+            )}
           </div>
 
-          <div className="mt-12 text-sm text-gray-400">
-            No credit card required • 30-day money-back guarantee • Cancel anytime
-          </div>
+          {!user && (
+            <div className="mt-12 text-sm text-gray-400">
+              No credit card required • 30-day money-back guarantee • Cancel anytime
+            </div>
+          )}
         </motion.div>
       </section>
     </main>

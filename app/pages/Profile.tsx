@@ -67,14 +67,22 @@ export default function ProfilePage() {
 
   const loadUserData = useCallback(async (userId: string) => {
     try {
-      // Load journal entries
+      // Verify we have a valid user ID before querying
+      if (!userId) {
+        console.warn('No user ID provided for data loading');
+        return;
+      }
+
+      // Load journal entries with error handling
       const { data: entries, error } = await supabase
         .from('journal_entries')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (error) {throw error;}
+      if (error) {
+        // Continue without entries rather than throwing
+      }
 
       // Calculate user statistics
       const now = new Date();
@@ -104,7 +112,7 @@ export default function ProfilePage() {
         
         if (mostRecent.getTime() >= today.getTime() - 86400000) {
           currentStreak = 1;
-          let checkDate = new Date(mostRecent);
+          const checkDate = new Date(mostRecent);
           checkDate.setDate(checkDate.getDate() - 1);
           
           for (let i = 1; i < entriesArray.length; i++) {
@@ -121,11 +129,15 @@ export default function ProfilePage() {
         }
       }
 
-      // Load moodboard data
-      const { data: moodboards } = await supabase
+      // Load moodboard data with error handling
+      const { data: moodboards, error: moodboardError } = await supabase
         .from('moodboards')
         .select('updated_at')
         .eq('user_id', userId);
+      
+      if (moodboardError) {
+        // Continue without moodboards
+      }
 
       const stats: UserStats = {
         memberSince: new Date(user?.created_at || Date.now()).toLocaleDateString(),
@@ -207,9 +219,9 @@ export default function ProfilePage() {
 
   const initializePage = useCallback(async () => {
     try {
-      // First check if we have a valid session
+      // First check if we have a valid session with user ID
       const session = await getSession();
-      if (!session) {
+      if (!session || !session.user?.id) {
         navigate('/auth');
         return;
       }
@@ -220,9 +232,12 @@ export default function ProfilePage() {
         return;
       }
       setUser(userData);
-      await loadUserData(userData.id);
-    } catch (error) {
-      console.error('Error loading user:', error);
+      
+      // Only load data if we have a confirmed user ID
+      if (session.user.id) {
+        await loadUserData(session.user.id);
+      }
+    } catch (_error) {
       navigate('/auth');
     } finally {
       setLoading(false);
@@ -376,13 +391,23 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center pt-20">
-        <Loader size="large" />
+        <div className="text-center">
+          <Loader size="large" />
+          <p className="mt-4 text-text-secondary">Loading your profile...</p>
+        </div>
       </div>
     );
   }
 
   if (!userStats) {
-    return null;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center pt-20">
+        <div className="text-center">
+          <Loader size="large" />
+          <p className="mt-4 text-text-secondary">Loading profile data...</p>
+        </div>
+      </div>
+    );
   }
 
   const tabs = [

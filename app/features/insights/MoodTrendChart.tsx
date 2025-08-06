@@ -63,7 +63,11 @@ const CustomTooltip = React.memo(({ active, payload, label }: {
       </div>
     );
   }
-  return null;
+  return (
+    <div className="flex items-center justify-center p-4">
+      <p className="text-sm text-text-secondary">No mood data available</p>
+    </div>
+  );
 });
 
 const MoodLegendItem = React.memo(({ 

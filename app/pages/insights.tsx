@@ -66,11 +66,17 @@ export default function InsightsPage() {
 
   const loadUserData = useCallback(async (userId: string) => {
     try {
+      // Verify we have a valid user ID before querying
+      if (!userId) {
+        console.warn('No user ID provided for data loading');
+        return;
+      }
+
       const daysBack = timeframe === 'week' ? 7 : timeframe === 'month' ? 30 : 90;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
-      // Load journal entries
+      // Load journal entries with error handling
       const { data: entries, error: entriesError } = await supabase
         .from('journal_entries')
         .select('*')
@@ -89,7 +95,6 @@ export default function InsightsPage() {
         .gte('updated_at', cutoffDate.toISOString());
         
       if (moodboardError) {
-        console.warn('Error loading moodboards:', moodboardError);
         setMoodboards([]);
       } else {
         setMoodboards(moodboardData || []);
@@ -106,9 +111,9 @@ export default function InsightsPage() {
 
   const initializePage = useCallback(async () => {
     try {
-      // First check if we have a valid session
+      // First check if we have a valid session with user ID
       const session = await getSession();
-      if (!session) {
+      if (!session || !session.user?.id) {
         navigate('/auth');
         return;
       }
@@ -119,7 +124,11 @@ export default function InsightsPage() {
         return;
       }
       setUser(userData);
-      await loadUserData(userData.id);
+      
+      // Only load data if we have a confirmed user ID
+      if (session.user.id) {
+        await loadUserData(session.user.id);
+      }
     } catch (error) {
       console.error('Error loading user:', error);
       navigate('/auth');
@@ -149,8 +158,8 @@ export default function InsightsPage() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center pt-20">
         <div className="text-center">
-          <Loader size="large" className="mb-4" />
-          <p className="text-text-secondary">Loading your insights...</p>
+          <Loader size="large" />
+          <p className="mt-4 text-text-secondary">Loading your insights...</p>
         </div>
       </div>
     );

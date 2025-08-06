@@ -56,7 +56,7 @@ export default function DashboardPage() {
       
       // First check if we have a valid session
       const session = await getSession();
-      if (!session) {
+      if (!session || !session.user?.id) {
         navigate('/auth');
         return;
       }
@@ -73,11 +73,13 @@ export default function DashboardPage() {
       setSubscription(subscriptionData);
 
       // Fetch real metrics from Supabase with proper error handling
-      try {
-        const [boardsResponse, entriesResponse] = await Promise.all([
-          supabase.from('moodboards').select('id').eq('user_id', userData.id),
-          supabase.from('journal_entries').select('id').eq('user_id', userData.id)
-        ]);
+      // Only query if we have a confirmed user ID
+      if (session.user.id) {
+        try {
+          const [boardsResponse, entriesResponse] = await Promise.all([
+            supabase.from('moodboards').select('id').eq('user_id', session.user.id),
+            supabase.from('journal_entries').select('id').eq('user_id', session.user.id)
+          ]);
 
         const boardCount = boardsResponse.data?.length || 0;
         const entryCount = entriesResponse.data?.length || 0;
@@ -87,23 +89,22 @@ export default function DashboardPage() {
           (Date.now() - new Date(userData.created_at).getTime()) / MILLISECONDS_PER_DAY
         );
         
-        setMetrics({
-          boardCount,
-          entryCount,
-          daysActive
-        });
-      } catch (metricsError) {
-        // If metrics fail, still show the dashboard with default values
-        console.warn('Could not load metrics:', metricsError);
-        setMetrics({
-          boardCount: 0,
-          entryCount: 0,
-          daysActive: 0
-        });
+          setMetrics({
+            boardCount,
+            entryCount,
+            daysActive
+          });
+        } catch (_metricsError) {
+          // If metrics fail, still show the dashboard with default values
+          setMetrics({
+            boardCount: 0,
+            entryCount: 0,
+            daysActive: 0
+          });
+        }
       }
       
     } catch (error) {
-      console.error('Error loading user data:', error);
       setError('Unable to load dashboard. Please try again.');
       
       // If auth error, redirect to auth page
@@ -226,7 +227,10 @@ export default function DashboardPage() {
 function LoadingState() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
-      <Loader size="large" />
+      <div className="text-center">
+        <Loader size="large" />
+        <p className="mt-4 text-text-secondary">Loading your data...</p>
+      </div>
     </div>
   );
 }
