@@ -41,7 +41,7 @@ function PublicNav({
           onClick={() => navigate('/auth')}
           className="ml-4 px-5 py-2 bg-primary text-white rounded-full font-medium hover:bg-primary-600 transition-all duration-200"
         >
-          Try for Free
+          Get Started
         </button>
         <button 
           onClick={() => navigate('/auth')}
@@ -75,7 +75,7 @@ function PublicNav({
                   onClick={() => { navigate('/auth'); setIsMenuOpen(false) }}
                   className="w-full px-6 py-3 bg-primary text-white rounded-full font-medium"
                 >
-                  Try for Free
+                  Get Started
                 </button>
                 <button 
                   onClick={() => { navigate('/auth'); setIsMenuOpen(false) }}
@@ -333,7 +333,7 @@ export default function Navbar() {
           {/* No logo on landing page */}
           <div />
           
-          {/* Simple enter dashboard button */}
+          {/* Simple enter dashboard and sign out buttons */}
           <div className="flex items-center space-x-3">
             <button 
               onClick={() => navigate('/dashboard')}
@@ -341,17 +341,29 @@ export default function Navbar() {
             >
               Enter Dashboard
             </button>
+            <button 
+              onClick={handleSignOut}
+              className="px-6 py-2.5 text-red-600 hover:bg-red-50 rounded-full font-medium transition-colors"
+            >
+              Sign Out
+            </button>
           </div>
 
-          {/* Mobile: Same simple button */}
+          {/* Mobile: Same simple buttons */}
           {isMenuOpen && (
             <div className="md:hidden bg-white/95 backdrop-blur-md border-t border-primary/10 shadow-lg">
-              <div className="container mx-auto px-4 py-4">
+              <div className="container mx-auto px-4 py-4 space-y-2">
                 <button 
                   onClick={() => { navigate('/dashboard'); setIsMenuOpen(false) }}
                   className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-semibold shadow-md"
                 >
                   Enter Dashboard
+                </button>
+                <button 
+                  onClick={() => { handleSignOut(); setIsMenuOpen(false) }}
+                  className="w-full px-6 py-3 text-red-600 hover:bg-red-50 rounded-full font-medium"
+                >
+                  Sign Out
                 </button>
               </div>
             </div>
