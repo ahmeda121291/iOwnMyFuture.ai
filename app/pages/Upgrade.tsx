@@ -65,9 +65,12 @@ export default function UpgradePage() {
 
   const handleUpgrade = async (priceId: string) => {
     // Dev logging
-    if (import.meta.env.MODE !== 'production') {
-      console.log('[Upgrade] Starting checkout with:', { priceId, userId: user?.id, email: user?.email });
-    }
+    console.log('[Upgrade] Starting checkout with:', { 
+      priceId, 
+      userId: user?.id, 
+      email: user?.email,
+      origin: window.location.origin 
+    });
 
     if (!user) {
       toast.error('Please log in to continue');
@@ -76,7 +79,7 @@ export default function UpgradePage() {
     }
 
     setLoading(true);
-    const loadingToast = toast.loading('Redirecting to checkout...');
+    const loadingToast = toast.loading('Preparing secure checkout...');
     
     try {
       // Get the redirect URL after successful payment
@@ -93,64 +96,82 @@ export default function UpgradePage() {
       };
 
       // Dev logging
-      if (import.meta.env.MODE !== 'production') {
-        console.log('[Upgrade] Creating checkout session with params:', checkoutParams);
-      }
+      console.log('[Upgrade] Creating checkout session with params:', checkoutParams);
+
+      // Update loading message
+      toast.loading('Connecting to payment processor...', { id: loadingToast });
 
       // Create Stripe checkout session via Edge Function
       const response = await createCheckoutSession(checkoutParams);
 
       // Dev logging
-      if (import.meta.env.MODE !== 'production') {
-        console.log('[Upgrade] Checkout session response:', response);
-      }
+      console.log('[Upgrade] Checkout session response:', response);
 
       // Validate response
       if (!response || typeof response !== 'object') {
+        console.error('[Upgrade] Invalid response structure:', response);
         throw new Error('Invalid response from checkout service');
       }
 
       const { url, sessionId } = response;
 
       if (!url) {
+        console.error('[Upgrade] Response missing URL:', response);
         throw new Error('No checkout URL received from Stripe');
       }
 
       if (!sessionId) {
+        console.error('[Upgrade] Response missing session ID:', response);
         throw new Error('No session ID received from Stripe');
       }
 
       // Store session for verification
       sessionStorage.setItem('checkoutSessionId', sessionId);
       
-      // Dismiss loading toast before redirect
-      toast.dismiss(loadingToast);
+      // Update loading message
+      toast.loading('Redirecting to secure checkout...', { id: loadingToast });
       
       // Dev logging
-      if (import.meta.env.MODE !== 'production') {
-        console.log('[Upgrade] Redirecting to Stripe checkout:', url);
-      }
+      console.log('[Upgrade] Redirecting to Stripe checkout URL:', url);
 
-      // Redirect immediately to Stripe Checkout
-      window.location.href = url;
+      // Small delay to show the message
+      setTimeout(() => {
+        // Dismiss loading toast before redirect
+        toast.dismiss(loadingToast);
+        // Redirect to Stripe Checkout
+        window.location.href = url;
+      }, 500);
     } catch (error) {
-      // Log error details
+      // Log full error details
+      console.error('[Upgrade] Full checkout error:', error);
+      
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
-      if (import.meta.env.MODE !== 'production') {
-        console.error('[Upgrade] Checkout error:', error);
+      // Check for specific error types
+      if (errorMessage.includes('CSRF')) {
+        console.error('[Upgrade] CSRF token error - may need to refresh page');
+        toast.error('Session expired. Please refresh the page and try again.');
+      } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('authenticated')) {
+        console.error('[Upgrade] Authentication error');
+        toast.error('Please log in again to continue');
+        navigate('/auth');
+      } else if (errorMessage.includes('price')) {
+        console.error('[Upgrade] Price ID error:', priceId);
+        toast.error('Invalid pricing plan. Please contact support.');
+      } else {
+        toast.error(`Failed to start checkout: ${errorMessage}`);
       }
 
       errorTracker.trackError(error, {
         component: 'Upgrade',
         action: 'handleUpgrade',
         priceId,
-        userId: user.id,
-        errorMessage
+        userId: user?.id,
+        errorMessage,
+        userAgent: navigator.userAgent
       });
       
       toast.dismiss(loadingToast);
-      toast.error(`Failed to start checkout: ${errorMessage}`);
       setLoading(false);
     }
   };
@@ -227,7 +248,10 @@ export default function UpgradePage() {
             </ul>
 
             <Button
-              onClick={() => handleUpgrade('price_1QS0uQRqrkWBY7xJQnRLMhvL')}
+              onClick={() => {
+                console.log('[Upgrade] Monthly plan button clicked');
+                handleUpgrade('price_1QS0uQRqrkWBY7xJQnRLMhvL');
+              }}
               disabled={loading}
               className="w-full bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center"
             >
@@ -284,7 +308,10 @@ export default function UpgradePage() {
             </ul>
 
             <Button
-              onClick={() => handleUpgrade('price_1QS0vnRqrkWBY7xJP77VQkUP')}
+              onClick={() => {
+                console.log('[Upgrade] Annual plan button clicked');
+                handleUpgrade('price_1QS0vnRqrkWBY7xJP77VQkUP');
+              }}
               disabled={loading}
               className="w-full bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 text-white py-3 rounded-lg font-semibold flex items-center justify-center shadow-lg"
             >

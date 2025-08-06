@@ -45,33 +45,49 @@ function corsResponse(body: string | object | null, status = 200) {
 }
 
 Deno.serve(async (req) => {
+  console.log('[stripe-checkout] Request received:', {
+    method: req.method,
+    url: req.url,
+    headers: {
+      authorization: req.headers.get('authorization') ? 'PRESENT' : 'MISSING',
+      contentType: req.headers.get('content-type')
+    }
+  });
+
   try {
     if (req.method === 'OPTIONS') {
+      console.log('[stripe-checkout] Handling OPTIONS request');
       return handleCORS(corsHeaders);
     }
 
     if (req.method !== 'POST') {
+      console.log('[stripe-checkout] Invalid method:', req.method);
       return corsResponse({ error: 'Method not allowed' }, 405);
     }
 
+    console.log('[stripe-checkout] Authenticating user and validating CSRF...');
+    
     // Authenticate and validate CSRF token
     const authResult = await authenticateAndValidateCSRF(req, { corsHeaders });
     if (!authResult.success) {
+      console.error('[stripe-checkout] Auth/CSRF validation failed');
       return authResult.response!;
     }
 
     const user = authResult.user!;
+    console.log('[stripe-checkout] User authenticated:', user.email);
 
     // Parse and validate request body
     const requestBody = await req.json();
     
-    // Log incoming request in dev
-    if (Deno.env.get('ENVIRONMENT') !== 'production') {
-      console.log('[stripe-checkout] Incoming request body:', { 
-        ...requestBody, 
-        csrf_token: requestBody.csrf_token ? 'PRESENT' : 'MISSING' 
-      });
-    }
+    // Always log incoming request for debugging
+    console.log('[stripe-checkout] Incoming request body:', { 
+      ...requestBody, 
+      csrf_token: requestBody.csrf_token ? 'PRESENT (length: ' + requestBody.csrf_token.length + ')' : 'MISSING',
+      price_id: requestBody.price_id,
+      mode: requestBody.mode,
+      user_id: requestBody.user_id
+    });
     
     const validationResult = CheckoutRequestSchema.safeParse(requestBody);
     
@@ -110,11 +126,17 @@ Deno.serve(async (req) => {
 
     // CRITICAL: Validate price_id exists and is active
     try {
-      if (Deno.env.get('ENVIRONMENT') !== 'production') {
-        console.log(`[stripe-checkout] Validating price: ${price_id}`);
-      }
+      console.log(`[stripe-checkout] Validating price: ${price_id}`);
       
       const price = await stripe.prices.retrieve(price_id);
+      console.log(`[stripe-checkout] Price retrieved:`, {
+        id: price.id,
+        active: price.active,
+        type: price.type,
+        currency: price.currency,
+        unit_amount: price.unit_amount
+      });
+      
       if (!price.active) {
         console.error(`[stripe-checkout] Attempted to use inactive price: ${price_id}`);
         return corsResponse({ error: 'Invalid or inactive price ID' }, 400);
@@ -130,12 +152,15 @@ Deno.serve(async (req) => {
         return corsResponse({ error: 'Invalid price type for one-time payment' }, 400);
       }
       
-      if (Deno.env.get('ENVIRONMENT') !== 'production') {
-        console.log(`[stripe-checkout] Price validated successfully: ${price.id}`);
-      }
+      console.log(`[stripe-checkout] Price validated successfully: ${price.id}`);
     } catch (priceError) {
       console.error(`[stripe-checkout] Failed to validate price ${price_id}:`, priceError);
-      return corsResponse({ error: 'Invalid or inaccessible price ID' }, 400);
+      console.error(`[stripe-checkout] Price error details:`, {
+        message: priceError.message,
+        type: priceError.type,
+        statusCode: priceError.statusCode
+      });
+      return corsResponse({ error: `Invalid or inaccessible price ID: ${priceError.message}` }, 400);
     }
 
     // Create Stripe customer mapping if none exists
@@ -231,7 +256,9 @@ Deno.serve(async (req) => {
     }
 
     // Create Stripe Checkout session with client_reference_id for webhook validation
-    const session = await stripe.checkout.sessions.create({
+    console.log(`[stripe-checkout] Creating checkout session for customer ${customerId}`);
+    
+    const sessionParams = {
       customer: customerId,
       client_reference_id: user.id, // Critical: links session to user for webhook processing
       payment_method_types: ['card'],
@@ -243,19 +270,42 @@ Deno.serve(async (req) => {
         userId: user.id,
         priceId: price_id,
       },
-    });
-
-    console.log(`[stripe-checkout] Created checkout session ${session.id} for customer ${customerId}`);
+    };
     
-    if (Deno.env.get('ENVIRONMENT') !== 'production') {
-      console.log(`[stripe-checkout] Session URL: ${session.url}`);
+    console.log(`[stripe-checkout] Session params:`, {
+      customer: sessionParams.customer,
+      mode: sessionParams.mode,
+      success_url: sessionParams.success_url,
+      cancel_url: sessionParams.cancel_url,
+      price_id: price_id
+    });
+    
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    console.log(`[stripe-checkout] Created checkout session:`, {
+      id: session.id,
+      url: session.url ? 'PRESENT' : 'MISSING',
+      urlLength: session.url ? session.url.length : 0,
+      status: session.status,
+      customer: session.customer
+    });
+    
+    if (!session.url) {
+      console.error(`[stripe-checkout] Session created but URL is missing!`);
+      return corsResponse({ error: 'Checkout session created but URL not available' }, 500);
     }
 
+    console.log(`[stripe-checkout] Session URL: ${session.url.substring(0, 60)}...`);
+
     // IMPORTANT: Return both sessionId and url in the expected format
-    return corsResponse({ 
+    const responseData = { 
       sessionId: session.id, 
       url: session.url 
-    });
+    };
+    
+    console.log(`[stripe-checkout] Sending success response with sessionId and url`);
+    
+    return corsResponse(responseData);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error(`[stripe-checkout] Checkout error:`, error);

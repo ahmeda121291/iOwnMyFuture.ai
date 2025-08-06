@@ -70,23 +70,22 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     };
   }
 
-  // Dev logging
-  if (import.meta.env.MODE !== 'production') {
-    console.log('[stripeClient] Creating checkout session with params:', params);
-  }
+  // Always log for debugging payment issues
+  console.log('[stripeClient] Creating checkout session with params:', params);
 
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session?.access_token) {
+    console.error('[stripeClient] No auth session found');
     throw new Error('User not authenticated');
   }
+
+  console.log('[stripeClient] Auth session found, user:', session.user?.email);
 
   // First, get a CSRF token
   const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
   
-  if (import.meta.env.MODE !== 'production') {
-    console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
-  }
+  console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
 
   const csrfResponse = await fetch(csrfTokenUrl, {
     method: 'GET',
@@ -97,15 +96,27 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     },
   });
 
+  console.log('[stripeClient] CSRF response status:', csrfResponse.status);
+
   if (!csrfResponse.ok) {
     const errorText = await csrfResponse.text();
-    if (import.meta.env.MODE !== 'production') {
-      console.error('[stripeClient] CSRF token fetch failed:', errorText);
-    }
-    throw new Error('Failed to get CSRF token');
+    console.error('[stripeClient] CSRF token fetch failed:', {
+      status: csrfResponse.status,
+      statusText: csrfResponse.statusText,
+      error: errorText
+    });
+    throw new Error(`Failed to get CSRF token: ${csrfResponse.status} ${errorText}`);
   }
 
-  const { csrf_token: csrfToken } = await csrfResponse.json();
+  const csrfData = await csrfResponse.json();
+  const csrfToken = csrfData.csrf_token;
+  
+  if (!csrfToken) {
+    console.error('[stripeClient] CSRF token missing in response:', csrfData);
+    throw new Error('CSRF token not found in response');
+  }
+
+  console.log('[stripeClient] CSRF token obtained successfully');
 
   // Now create the checkout session with CSRF token
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`;
@@ -120,10 +131,8 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     csrf_token: csrfToken,
   };
 
-  if (import.meta.env.MODE !== 'production') {
-    console.log('[stripeClient] Sending checkout request to:', apiUrl);
-    console.log('[stripeClient] Request body:', { ...requestBody, csrf_token: 'REDACTED' });
-  }
+  console.log('[stripeClient] Sending checkout request to:', apiUrl);
+  console.log('[stripeClient] Request body:', { ...requestBody, csrf_token: 'REDACTED' });
   
   const response = await fetch(apiUrl, {
     method: 'POST',
@@ -135,19 +144,30 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     body: JSON.stringify(requestBody),
   });
 
+  console.log('[stripeClient] Checkout response status:', response.status);
+
   if (!response.ok) {
-    const errorData = await response.json();
-    if (import.meta.env.MODE !== 'production') {
-      console.error('[stripeClient] Checkout session creation failed:', errorData);
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = { error: await response.text() };
     }
-    throw new Error(errorData.error || 'Failed to create checkout session');
+    console.error('[stripeClient] Checkout session creation failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      error: errorData
+    });
+    throw new Error(errorData.error || `Failed to create checkout session (${response.status})`);
   }
 
   const result = await response.json();
   
-  if (import.meta.env.MODE !== 'production') {
-    console.log('[stripeClient] Checkout session created successfully:', result);
-  }
+  console.log('[stripeClient] Checkout session created successfully:', {
+    sessionId: result.sessionId,
+    hasUrl: !!result.url,
+    urlPrefix: result.url ? result.url.substring(0, 50) + '...' : 'N/A'
+  });
 
   return result;
 };
