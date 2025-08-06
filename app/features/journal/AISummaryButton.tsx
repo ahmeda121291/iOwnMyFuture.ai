@@ -53,8 +53,14 @@ export default function AISummaryButton({
     }
   };
 
+  // Show disabled state when word count is too low
   if (wordCount < minWords) {
-    return null;
+    return (
+      <div className="flex items-center gap-2 text-gray-400 text-sm">
+        <Sparkles className="w-4 h-4" />
+        <span>Write {minWords - wordCount} more words for AI summary</span>
+      </div>
+    );
   }
 
   return (

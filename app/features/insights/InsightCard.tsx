@@ -33,7 +33,7 @@ const InsightCard = React.memo(function InsightCard({
     switch (changeType) {
       case 'positive': return <TrendingUp className="w-4 h-4" />;
       case 'negative': return <TrendingDown className="w-4 h-4" />;
-      default: return null;
+      default: return <span className="w-4 h-4 inline-block" />; // Empty placeholder for neutral
     }
   }, [changeType]);
 

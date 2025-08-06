@@ -352,7 +352,14 @@ function ElementContent({ element, isSelected, isEditable, onContentChange }: El
     );
   }
 
-  return null;
+  // Fallback for unknown element types
+  return (
+    <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-lg">
+      <div className="text-center p-4">
+        <p className="text-gray-500 text-sm">Unknown element type</p>
+      </div>
+    </div>
+  );
 }
 
 interface ElementControlsProps {

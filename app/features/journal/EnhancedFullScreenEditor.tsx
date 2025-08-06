@@ -286,8 +286,9 @@ export default function EnhancedFullScreenEditor({
     setShowPrompt(false);
   };
 
+  // Don't render anything when editor is closed
   if (!isOpen) {
-    return null;
+    return <div className="hidden" aria-hidden="true"></div>;
   }
 
   return (

@@ -168,8 +168,9 @@ export default function FirstTimeChecklist() {
     setIsDismissed(true);
   };
 
+  // Don't show checklist if loading, dismissed, or already completed
   if (loading || isDismissed || progress?.completed_at) {
-    return null;
+    return <div className="hidden" aria-hidden="true"></div>;
   }
 
   const checklistItems: ChecklistItem[] = [
