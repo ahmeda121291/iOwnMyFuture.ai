@@ -98,13 +98,22 @@ export const signOut = async () => {
 };
 
 // Stripe helpers
-export const getUserSubscription = async () => {
+export const getUserSubscription = async (userId?: string) => {
   try {
-    const { data, error } = await supabase
-      .from('stripe_user_subscriptions')
-      .select('*')
-      .maybeSingle();
+    // If userId is provided, use it. Otherwise rely on RLS
+    let query = supabase.from('subscriptions').select('*');
+    
+    if (userId) {
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query.maybeSingle();
+    
     if (error) {
+      if (error.code === 'PGRST116') {
+        // No subscription found - this is expected for new users
+        return null;
+      }
       console.warn('Error getting user subscription:', error);
       return null;
     }

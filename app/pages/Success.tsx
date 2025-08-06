@@ -29,7 +29,6 @@ export default function SuccessPage() {
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   
   const sessionId = searchParams.get('session_id');
-  const redirectPath = searchParams.get('redirect');
 
   useEffect(() => {
     confirmPaymentAndUpdateSubscription();
@@ -58,7 +57,9 @@ export default function SuccessPage() {
         body: { sessionId, userId: session.user.id }
       });
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
       if (data?.success) {
         setSessionDetails({

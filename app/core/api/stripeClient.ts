@@ -76,6 +76,24 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     throw new Error('User not authenticated');
   }
 
+  // First, get a CSRF token
+  const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
+  const csrfResponse = await fetch(csrfTokenUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      // eslint-disable-next-line @typescript-eslint/naming-convention
+      'content-type': 'application/json',
+    },
+  });
+
+  if (!csrfResponse.ok) {
+    throw new Error('Failed to get CSRF token');
+  }
+
+  const { csrf_token: csrfToken } = await csrfResponse.json();
+
+  // Now create the checkout session with CSRF token
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`;
   
   const response = await fetch(apiUrl, {
@@ -92,6 +110,7 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
       cancel_url: params.cancelUrl,
       user_id: params.userId || session.user?.id,
       email: params.email || session.user?.email,
+      csrf_token: csrfToken,
     }),
   });
 
