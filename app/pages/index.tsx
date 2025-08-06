@@ -21,6 +21,7 @@ import { motion } from 'framer-motion';
 import { Link as ScrollLink } from 'react-scroll';
 import Button from '../shared/components/Button';
 import { getCurrentUser } from '../core/api/supabase';
+import { getRedirectPath } from '../shared/utils/navigation';
 import { type User } from '../core/types';
 
 interface Feature {
@@ -73,13 +74,10 @@ export default function LandingPage() {
     }
   }, []);
 
-  // Smart CTA handler - routes based on auth status
-  const handleStartJournaling = () => {
-    if (user) {
-      navigate('/dashboard');
-    } else {
-      navigate('/auth');
-    }
+  // Smart CTA handler - routes based on auth and subscription status
+  const handleStartJournaling = async () => {
+    const redirectPath = await getRedirectPath();
+    navigate(redirectPath);
   };
 
   const features: Feature[] = [

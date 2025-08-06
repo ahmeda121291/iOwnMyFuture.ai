@@ -20,6 +20,7 @@ import {
 import { signOut, supabase } from '../core/api/supabase';
 import { type JournalEntry } from '../core/types';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
+import { safeNavigate } from '../shared/utils/navigation';
 import ProfileHeader from '../features/Profile/ProfileHeader';
 import SocialConnections from '../features/Profile/SocialConnections';
 import AccountSettings from '../features/Profile/AccountSettings';
@@ -577,7 +578,7 @@ export default function ProfilePage() {
                         <UserIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500 mb-4">No recent activity to show</p>
                         <Button
-                          onClick={() => navigate('/journal')}
+                          onClick={() => safeNavigate(navigate, '/journal', { requireAuth: true, requirePro: true })}
                           className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
                         >
                           Start Journaling

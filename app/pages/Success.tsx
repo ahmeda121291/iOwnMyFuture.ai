@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
+import { safeNavigate } from '../shared/utils/navigation';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import toast from 'react-hot-toast';
@@ -42,7 +43,8 @@ export default function SuccessPage() {
     if (!sessionId) {
       setLoading(false);
       toast.error('No session ID found');
-      navigate('/dashboard');
+      // Use safe navigation with Pro check
+      await safeNavigate(navigate, '/dashboard', { requireAuth: true, requirePro: true });
       return;
     }
 
@@ -81,9 +83,9 @@ export default function SuccessPage() {
       errorTracker.trackError(error, { component: 'Success', action: 'confirmPayment' });
       toast.error('Failed to confirm payment. Please contact support.');
       
-      // Still redirect to dashboard after a delay
-      setTimeout(() => {
-        navigate('/dashboard');
+      // Still redirect to dashboard after a delay with auth check
+      setTimeout(async () => {
+        await safeNavigate(navigate, '/dashboard', { requireAuth: true, requirePro: false });
       }, 3000);
     } finally {
       setLoading(false);

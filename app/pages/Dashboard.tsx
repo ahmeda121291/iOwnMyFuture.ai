@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus, AlertCircle } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
+import { safeNavigate } from '../shared/utils/navigation';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
@@ -113,21 +114,21 @@ export default function DashboardPage() {
       icon: <Target className="w-6 h-6" />,
       title: 'Create Vision Board',
       description: 'Design your AI-powered vision board',
-      action: () => navigate('/moodboard'),
+      action: () => safeNavigate(navigate, '/moodboard', { requireAuth: true, requirePro: true }),
       color: 'bg-purple-100 text-purple-600'
     },
     {
       icon: <BookOpen className="w-6 h-6" />,
       title: 'Write Journal Entry',
       description: 'Capture your thoughts and progress',
-      action: () => navigate('/journal'),
+      action: () => safeNavigate(navigate, '/journal', { requireAuth: true, requirePro: true }),
       color: 'bg-blue-100 text-blue-600'
     },
     {
       icon: <TrendingUp className="w-6 h-6" />,
       title: 'View Insights',
       description: 'Analyze your growth patterns',
-      action: () => navigate('/insights'),
+      action: () => safeNavigate(navigate, '/insights', { requireAuth: true, requirePro: true }),
       color: 'bg-green-100 text-green-600'
     }
   ], [navigate]);
@@ -137,7 +138,7 @@ export default function DashboardPage() {
   }, [navigate]);
 
   const handleCreateVisionBoard = useCallback(() => {
-    navigate('/moodboard');
+    safeNavigate(navigate, '/moodboard', { requireAuth: true, requirePro: true });
   }, [navigate]);
 
   // Early returns for loading/error states
