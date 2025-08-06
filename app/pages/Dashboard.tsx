@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus, AlertCircle } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
+import { errorTracker } from '../shared/utils/errorTracking';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import { safeNavigate } from '../shared/utils/navigation';
 import Button from '../shared/components/Button';
@@ -60,20 +61,28 @@ export default function DashboardPage() {
             supabase.from('journal_entries').select('id').eq('user_id', user.id)
           ]);
 
-        const boardCount = boardsResponse.data?.length || 0;
-        const entryCount = entriesResponse.data?.length || 0;
-        
-        // Calculate days active since account creation
-        const daysActive = Math.ceil(
-          (Date.now() - new Date(user.created_at).getTime()) / MILLISECONDS_PER_DAY
-        );
-        
+          if (boardsResponse.error) throw boardsResponse.error;
+          if (entriesResponse.error) throw entriesResponse.error;
+
+          const boardCount = boardsResponse.data?.length || 0;
+          const entryCount = entriesResponse.data?.length || 0;
+          
+          // Calculate days active since account creation
+          const daysActive = Math.ceil(
+            (Date.now() - new Date(user.created_at).getTime()) / MILLISECONDS_PER_DAY
+          );
+          
           setMetrics({
             boardCount,
             entryCount,
             daysActive
           });
-        } catch (_metricsError) {
+        } catch (metricsError) {
+          errorTracker.trackError(metricsError, { 
+            component: 'Dashboard', 
+            action: 'loadMetrics',
+            userId: user.id 
+          });
           // If metrics fail, still show the dashboard with default values
           setMetrics({
             boardCount: 0,

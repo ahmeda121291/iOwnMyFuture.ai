@@ -79,14 +79,24 @@ export default function ProfilePage() {
     try {
 
       // Load journal entries with error handling
-      const { data: entries, error } = await supabase
-        .from('journal_entries')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      let entries: JournalEntry[] = [];
+      try {
+        const { data, error } = await supabase
+          .from('journal_entries')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
 
-      if (error) {
+        if (error) throw error;
+        entries = data || [];
+      } catch (error) {
+        errorTracker.trackError(error, { 
+          component: 'Profile', 
+          action: 'loadJournalEntries',
+          userId: user.id 
+        });
         // Continue without entries rather than throwing
+        entries = [];
       }
 
       // Calculate user statistics
@@ -135,13 +145,23 @@ export default function ProfilePage() {
       }
 
       // Load moodboard data with error handling
-      const { data: moodboards, error: moodboardError } = await supabase
-        .from('moodboards')
-        .select('updated_at')
-        .eq('user_id', user.id);
-      
-      if (moodboardError) {
+      let moodboards: Array<{ updated_at: string }> = [];
+      try {
+        const { data, error } = await supabase
+          .from('moodboards')
+          .select('updated_at')
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        moodboards = data || [];
+      } catch (error) {
+        errorTracker.trackError(error, { 
+          component: 'Profile', 
+          action: 'loadMoodboards',
+          userId: user.id 
+        });
         // Continue without moodboards
+        moodboards = [];
       }
 
       const stats: UserStats = {

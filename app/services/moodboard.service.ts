@@ -1,5 +1,7 @@
 import { supabase } from '../core/api/supabase';
 import type { Moodboard, MoodboardElement } from '../core/types';
+import { errorTracker } from '../shared/utils/errorTracking';
+import toast from 'react-hot-toast';
 
 export interface CreateMoodboardDto {
   title: string;
@@ -62,13 +64,18 @@ class MoodboardService {
         .single();
 
       if (error) {
-        throw new Error(`Failed to create moodboard: ${error.message}`);
+        throw error;
       }
 
       return this.transformMoodboard(data);
     } catch (error) {
-      console.error('CreateMoodboard error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'createMoodboard',
+        userId
+      });
+      toast.error('Couldn\'t create vision board. Please try again.');
+      throw new Error('Failed to create moodboard');
     }
   }
 
@@ -119,7 +126,7 @@ class MoodboardService {
       const { data, error, count } = await query;
 
       if (error) {
-        throw new Error(`Failed to fetch moodboards: ${error.message}`);
+        throw error;
       }
 
       return {
@@ -130,8 +137,20 @@ class MoodboardService {
         totalPages: Math.ceil((count || 0) / pageSize),
       };
     } catch (error) {
-      console.error('GetMoodboards error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'getMoodboards',
+        userId: options.userId
+      });
+      toast.error('Couldn\'t load vision boards. Try refreshing the page.');
+      // Return empty result instead of throwing
+      return {
+        data: [],
+        total: 0,
+        page: options.page || 1,
+        pageSize: options.pageSize || 9,
+        totalPages: 0,
+      };
     }
   }
 
@@ -147,13 +166,17 @@ class MoodboardService {
         .single();
 
       if (error) {
-        console.error('GetMoodboard error:', error);
-        return null;
+        throw error;
       }
 
       return this.transformMoodboard(data);
     } catch (error) {
-      console.error('GetMoodboard error:', error);
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'getMoodboard',
+        moodboardId
+      });
+      toast.error('Couldn\'t load vision board. Please try again.');
       return null;
     }
   }
@@ -167,7 +190,7 @@ class MoodboardService {
     updates: UpdateMoodboardDto
   ): Promise<Moodboard> {
     try {
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
 
@@ -191,13 +214,19 @@ class MoodboardService {
         .single();
 
       if (error) {
-        throw new Error(`Failed to update moodboard: ${error.message}`);
+        throw error;
       }
 
       return this.transformMoodboard(data);
     } catch (error) {
-      console.error('UpdateMoodboard error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'updateMoodboard',
+        moodboardId,
+        userId
+      });
+      toast.error('Couldn\'t update vision board. Please try again.');
+      throw new Error('Failed to update moodboard');
     }
   }
 
@@ -220,11 +249,17 @@ class MoodboardService {
         .eq('user_id', userId);
 
       if (error) {
-        throw new Error(`Failed to update moodboard elements: ${error.message}`);
+        throw error;
       }
     } catch (error) {
-      console.error('UpdateElements error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'updateElements',
+        moodboardId,
+        userId
+      });
+      toast.error('Couldn\'t save changes. Please try again.');
+      throw new Error('Failed to update moodboard elements');
     }
   }
 
@@ -240,11 +275,17 @@ class MoodboardService {
         .eq('user_id', userId);
 
       if (error) {
-        throw new Error(`Failed to delete moodboard: ${error.message}`);
+        throw error;
       }
     } catch (error) {
-      console.error('DeleteMoodboard error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'deleteMoodboard',
+        moodboardId,
+        userId
+      });
+      toast.error('Couldn\'t delete vision board. Please try again.');
+      throw new Error('Failed to delete moodboard');
     }
   }
 
@@ -270,14 +311,20 @@ class MoodboardService {
         .single();
 
       if (error) {
-        throw new Error(`Failed to create share link: ${error.message}`);
+        throw error;
       }
 
       const shareUrl = `${window.location.origin}/share/${data.id}`;
       return shareUrl;
     } catch (error) {
-      console.error('ShareMoodboard error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'shareMoodboard',
+        moodboardId: options.moodboardId,
+        userId
+      });
+      toast.error('Couldn\'t create share link. Please try again.');
+      throw new Error('Failed to create share link');
     }
   }
 
@@ -293,18 +340,23 @@ class MoodboardService {
         .single();
 
       if (snapshotError) {
-        console.error('GetPublicMoodboard error:', snapshotError);
-        return null;
+        throw snapshotError;
       }
 
       // Check if expired
       if (snapshot.expires_at && new Date(snapshot.expires_at) < new Date()) {
+        toast.error('This share link has expired.');
         return null;
       }
 
       return this.transformMoodboard(snapshot.moodboards);
     } catch (error) {
-      console.error('GetPublicMoodboard error:', error);
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'getPublicMoodboard',
+        shareId
+      });
+      toast.error('Couldn\'t load shared vision board.');
       return null;
     }
   }
@@ -326,8 +378,14 @@ class MoodboardService {
         theme: original.board_data?.theme,
       });
     } catch (error) {
-      console.error('DuplicateMoodboard error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'duplicateMoodboard',
+        moodboardId,
+        userId
+      });
+      toast.error('Couldn\'t duplicate vision board. Please try again.');
+      throw new Error('Failed to duplicate moodboard');
     }
   }
 
@@ -349,13 +407,19 @@ class MoodboardService {
       });
 
       if (error) {
-        throw new Error(`Failed to generate AI elements: ${error.message}`);
+        throw error;
       }
 
       return data.elements as MoodboardElement[];
     } catch (error) {
-      console.error('GenerateAIElements error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'generateAIElements',
+        goals,
+        mode
+      });
+      toast.error('Couldn\'t generate AI suggestions. Please try again later.');
+      throw new Error('Failed to generate AI elements');
     }
   }
 
@@ -375,7 +439,7 @@ class MoodboardService {
         .eq('user_id', userId);
 
       if (error) {
-        throw new Error(`Failed to fetch moodboard stats: ${error.message}`);
+        throw error;
       }
 
       const stats = {
@@ -389,15 +453,31 @@ class MoodboardService {
 
       return stats;
     } catch (error) {
-      console.error('GetMoodboardStats error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'getMoodboardStats',
+        userId
+      });
+      // Return empty stats on error
+      return {
+        totalMoodboards: 0,
+        totalElements: 0,
+        publicMoodboards: 0,
+      };
     }
   }
 
   /**
    * Export moodboard as JSON
    */
-  async exportMoodboard(moodboardId: string, userId: string): Promise<any> {
+  async exportMoodboard(moodboardId: string, userId: string): Promise<{
+    title: string | undefined;
+    description: string | undefined;
+    elements: MoodboardElement[] | undefined;
+    theme: string | undefined;
+    created_at: string;
+    updated_at: string;
+  }> {
     try {
       const moodboard = await this.getMoodboard(moodboardId);
       
@@ -414,15 +494,26 @@ class MoodboardService {
         updated_at: moodboard.updated_at,
       };
     } catch (error) {
-      console.error('ExportMoodboard error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'exportMoodboard',
+        moodboardId,
+        userId
+      });
+      toast.error('Couldn\'t export vision board. Please try again.');
+      throw new Error('Failed to export moodboard');
     }
   }
 
   /**
    * Import moodboard from JSON
    */
-  async importMoodboard(userId: string, data: any): Promise<Moodboard> {
+  async importMoodboard(userId: string, data: {
+    title?: string;
+    description?: string;
+    elements?: MoodboardElement[];
+    theme?: string;
+  }): Promise<Moodboard> {
     try {
       return await this.createMoodboard(userId, {
         title: data.title || 'Imported Moodboard',
@@ -431,13 +522,18 @@ class MoodboardService {
         theme: data.theme,
       });
     } catch (error) {
-      console.error('ImportMoodboard error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'MoodboardService',
+        action: 'importMoodboard',
+        userId
+      });
+      toast.error('Couldn\'t import vision board. Please check the file format.');
+      throw new Error('Failed to import moodboard');
     }
   }
 
   // Private helper method to transform database record to Moodboard type
-  private transformMoodboard(data: any): Moodboard {
+  private transformMoodboard(data: Record<string, unknown>): Moodboard {
     return {
       id: data.id,
       user_id: data.user_id,

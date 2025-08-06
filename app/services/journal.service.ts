@@ -1,5 +1,7 @@
 import { supabase } from '../core/api/supabase';
 import type { JournalEntry } from '../core/types';
+import { errorTracker } from '../shared/utils/errorTracking';
+import toast from 'react-hot-toast';
 
 export interface CreateJournalEntryDto {
   content: string;
@@ -74,13 +76,18 @@ class JournalService {
         .single();
 
       if (error) {
-        throw new Error(`Failed to create journal entry: ${error.message}`);
+        throw error;
       }
 
       return data as JournalEntry;
     } catch (error) {
-      console.error('CreateEntry error:', error);
-      throw error;
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'createEntry',
+        userId 
+      });
+      toast.error('Couldn\'t save journal entry. Please try again.');
+      throw new Error('Failed to create journal entry');
     }
   }
 
@@ -141,7 +148,7 @@ class JournalService {
       const { data, error, count } = await query;
 
       if (error) {
-        throw new Error(`Failed to fetch journal entries: ${error.message}`);
+        throw error;
       }
 
       return {
@@ -152,8 +159,20 @@ class JournalService {
         totalPages: Math.ceil((count || 0) / pageSize),
       };
     } catch (error) {
-      console.error('GetEntries error:', error);
-      throw error;
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'getEntries',
+        userId: options.userId 
+      });
+      toast.error('Couldn\'t fetch journal entries. Try again later.');
+      // Return empty result instead of throwing
+      return {
+        data: [],
+        total: 0,
+        page: options.page || 1,
+        pageSize: options.pageSize || 10,
+        totalPages: 0,
+      };
     }
   }
 
@@ -170,13 +189,18 @@ class JournalService {
         .single();
 
       if (error) {
-        console.error('GetEntry error:', error);
-        return null;
+        throw error;
       }
 
       return data as JournalEntry;
     } catch (error) {
-      console.error('GetEntry error:', error);
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'getEntry',
+        entryId,
+        userId 
+      });
+      toast.error('Couldn\'t load journal entry. Please try again.');
       return null;
     }
   }
@@ -195,13 +219,19 @@ class JournalService {
         .single();
 
       if (error) {
-        throw new Error(`Failed to update journal entry: ${error.message}`);
+        throw error;
       }
 
       return data as JournalEntry;
     } catch (error) {
-      console.error('UpdateEntry error:', error);
-      throw error;
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'updateEntry',
+        entryId,
+        userId 
+      });
+      toast.error('Couldn\'t update journal entry. Please try again.');
+      throw new Error('Failed to update journal entry');
     }
   }
 
@@ -217,11 +247,17 @@ class JournalService {
         .eq('user_id', userId);
 
       if (error) {
-        throw new Error(`Failed to delete journal entry: ${error.message}`);
+        throw error;
       }
     } catch (error) {
-      console.error('DeleteEntry error:', error);
-      throw error;
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'deleteEntry',
+        entryId,
+        userId 
+      });
+      toast.error('Couldn\'t delete journal entry. Please try again.');
+      throw new Error('Failed to delete journal entry');
     }
   }
 
@@ -239,13 +275,18 @@ class JournalService {
         .eq('entry_date', dateStr);
 
       if (error) {
-        console.error('HasEntryForDate error:', error);
-        return false;
+        throw error;
       }
 
       return (count || 0) > 0;
     } catch (error) {
-      console.error('HasEntryForDate error:', error);
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'hasEntryForDate',
+        userId,
+        date: date.toISOString() 
+      });
+      // Return false on error to not block user flow
       return false;
     }
   }
@@ -263,7 +304,7 @@ class JournalService {
         .order('entry_date', { ascending: false });
 
       if (error) {
-        throw new Error(`Failed to fetch entries for stats: ${error.message}`);
+        throw error;
       }
 
       if (!entries || entries.length === 0) {
@@ -328,8 +369,19 @@ class JournalService {
         favoriteCategory,
       };
     } catch (error) {
-      console.error('GetStats error:', error);
-      throw error;
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'getStats',
+        userId 
+      });
+      // Return empty stats instead of throwing
+      return {
+        totalEntries: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+        entriesThisMonth: 0,
+        averageWordCount: 0,
+      };
     }
   }
 
@@ -352,7 +404,7 @@ class JournalService {
       });
 
       if (error) {
-        throw new Error(`Failed to generate summary: ${error.message}`);
+        throw error;
       }
 
       // Update the entry with the summary
@@ -360,8 +412,14 @@ class JournalService {
 
       return data.summary;
     } catch (error) {
-      console.error('GenerateSummary error:', error);
-      throw error;
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'generateSummary',
+        entryId,
+        userId 
+      });
+      toast.error('Couldn\'t generate AI summary. Please try again later.');
+      throw new Error('Failed to generate summary');
     }
   }
 
@@ -381,8 +439,7 @@ class JournalService {
         .lte('entry_date', endDate.toISOString().split('T')[0]);
 
       if (error) {
-        console.error('GetCalendarEntries error:', error);
-        return new Map();
+        throw error;
       }
 
       const entriesMap = new Map<string, boolean>();
@@ -392,7 +449,14 @@ class JournalService {
 
       return entriesMap;
     } catch (error) {
-      console.error('GetCalendarEntries error:', error);
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'getCalendarEntries',
+        userId,
+        year,
+        month 
+      });
+      // Return empty map on error to not break calendar view
       return new Map();
     }
   }
@@ -409,18 +473,23 @@ class JournalService {
         .order('entry_date', { ascending: true });
 
       if (error) {
-        throw new Error(`Failed to export entries: ${error.message}`);
+        throw error;
       }
 
       return data as JournalEntry[];
     } catch (error) {
-      console.error('ExportEntries error:', error);
-      throw error;
+      errorTracker.trackError(error, { 
+        component: 'JournalService', 
+        action: 'exportEntries',
+        userId 
+      });
+      toast.error('Couldn\'t export journal entries. Please try again.');
+      throw new Error('Failed to export entries');
     }
   }
 
   // Private helper methods
-  private calculateCurrentStreak(entries: any[]): number {
+  private calculateCurrentStreak(entries: Array<{ entry_date: string }>): number {
     if (entries.length === 0) {return 0;}
 
     let streak = 0;
@@ -452,7 +521,7 @@ class JournalService {
     return streak;
   }
 
-  private calculateLongestStreak(entries: any[]): number {
+  private calculateLongestStreak(entries: Array<{ entry_date: string }>): number {
     if (entries.length === 0) {return 0;}
 
     let maxStreak = 1;

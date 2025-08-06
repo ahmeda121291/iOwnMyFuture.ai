@@ -1,5 +1,7 @@
 import { loadStripe, type Stripe } from '@stripe/stripe-js';
 import { supabase } from '../core/api/supabase';
+import { errorTracker } from '../shared/utils/errorTracking';
+import toast from 'react-hot-toast';
 
 export interface PricingPlan {
   id: string;
@@ -87,13 +89,17 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to fetch pricing plans: ${error.message}`);
+        throw error;
       }
 
       return data.plans as PricingPlan[];
     } catch (error) {
-      console.error('GetPricingPlans error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'getPricingPlans'
+      });
+      toast.error('Couldn\'t load pricing plans. Please try again.');
+      return [];
     }
   }
 
@@ -126,7 +132,7 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to create checkout session: ${error.message}`);
+        throw error;
       }
 
       if (!data.sessionId) {
@@ -140,13 +146,18 @@ class StripeService {
       });
 
       if (redirectError) {
-        throw new Error(`Checkout redirect failed: ${redirectError.message}`);
+        throw redirectError;
       }
 
       return data.sessionId;
     } catch (error) {
-      console.error('CreateCheckoutSession error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'createCheckoutSession',
+        userId: options.userId
+      });
+      toast.error('Couldn\'t start checkout. Please try again.');
+      throw new Error('Failed to create checkout session');
     }
   }
 
@@ -168,7 +179,7 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to create billing portal session: ${error.message}`);
+        throw error;
       }
 
       if (!data.url) {
@@ -180,8 +191,13 @@ class StripeService {
 
       return data.url;
     } catch (error) {
-      console.error('CreateBillingPortalSession error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'createBillingPortalSession',
+        userId: options.userId
+      });
+      toast.error('Couldn\'t open billing portal. Please try again.');
+      throw new Error('Failed to create billing portal session');
     }
   }
 
@@ -202,7 +218,7 @@ class StripeService {
           // No subscription found
           return null;
         }
-        throw new Error(`Failed to fetch subscription: ${error.message}`);
+        throw error;
       }
 
       return {
@@ -215,7 +231,11 @@ class StripeService {
         planName: data.plan_name || 'Pro',
       } as Subscription;
     } catch (error) {
-      console.error('GetCurrentSubscription error:', error);
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'getCurrentSubscription',
+        userId
+      });
       return null;
     }
   }
@@ -230,11 +250,16 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to cancel subscription: ${error.message}`);
+        throw error;
       }
     } catch (error) {
-      console.error('CancelSubscription error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'cancelSubscription',
+        userId
+      });
+      toast.error('Couldn\'t cancel subscription. Please try again.');
+      throw new Error('Failed to cancel subscription');
     }
   }
 
@@ -248,11 +273,16 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to resume subscription: ${error.message}`);
+        throw error;
       }
     } catch (error) {
-      console.error('ResumeSubscription error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'resumeSubscription',
+        userId
+      });
+      toast.error('Couldn\'t resume subscription. Please try again.');
+      throw new Error('Failed to resume subscription');
     }
   }
 
@@ -268,7 +298,7 @@ class StripeService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        throw new Error(`Failed to fetch subscription history: ${error.message}`);
+        throw error;
       }
 
       return data.map(sub => ({
@@ -281,8 +311,13 @@ class StripeService {
         planName: sub.plan_name || 'Pro',
       })) as Subscription[];
     } catch (error) {
-      console.error('GetSubscriptionHistory error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'getSubscriptionHistory',
+        userId
+      });
+      toast.error('Couldn\'t load subscription history.');
+      return [];
     }
   }
 
@@ -296,13 +331,18 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to fetch payment methods: ${error.message}`);
+        throw error;
       }
 
       return data.paymentMethods as PaymentMethod[];
     } catch (error) {
-      console.error('GetPaymentMethods error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'getPaymentMethods',
+        userId
+      });
+      toast.error('Couldn\'t load payment methods.');
+      return [];
     }
   }
 
@@ -319,11 +359,17 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to update payment method: ${error.message}`);
+        throw error;
       }
     } catch (error) {
-      console.error('UpdateDefaultPaymentMethod error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'updateDefaultPaymentMethod',
+        userId,
+        paymentMethodId
+      });
+      toast.error('Couldn\'t update payment method. Please try again.');
+      throw new Error('Failed to update payment method');
     }
   }
 
@@ -335,7 +381,11 @@ class StripeService {
       const subscription = await this.getCurrentSubscription(userId);
       return subscription !== null && subscription.status === 'active';
     } catch (error) {
-      console.error('HasActiveSubscription error:', error);
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'hasActiveSubscription',
+        userId
+      });
       return false;
     }
   }
@@ -365,7 +415,11 @@ class StripeService {
 
       return 'free';
     } catch (error) {
-      console.error('GetSubscriptionStatus error:', error);
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'getSubscriptionStatus',
+        userId
+      });
       return 'free';
     }
   }
@@ -382,29 +436,45 @@ class StripeService {
       });
 
       if (error) {
-        console.error('Payment confirmation error:', error);
+        throw error;
       }
     } catch (error) {
-      console.error('HandlePaymentSuccess error:', error);
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'handlePaymentSuccess',
+        sessionId
+      });
+      // Don't show toast for this background operation
     }
   }
 
   /**
    * Get upcoming invoice
    */
-  async getUpcomingInvoice(userId: string): Promise<any> {
+  async getUpcomingInvoice(userId: string): Promise<{
+    amount_due: number;
+    amount_paid: number;
+    amount_remaining: number;
+    currency: string;
+    period_end: number;
+    period_start: number;
+  } | null> {
     try {
       const { data, error } = await supabase.functions.invoke('stripe-upcoming-invoice', {
         body: { userId },
       });
 
       if (error) {
-        throw new Error(`Failed to fetch upcoming invoice: ${error.message}`);
+        throw error;
       }
 
       return data.invoice;
     } catch (error) {
-      console.error('GetUpcomingInvoice error:', error);
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'getUpcomingInvoice',
+        userId
+      });
       return null;
     }
   }
@@ -422,11 +492,17 @@ class StripeService {
       });
 
       if (error) {
-        throw new Error(`Failed to apply coupon: ${error.message}`);
+        throw error;
       }
     } catch (error) {
-      console.error('ApplyCoupon error:', error);
-      throw error;
+      errorTracker.trackError(error, {
+        component: 'StripeService',
+        action: 'applyCoupon',
+        userId,
+        couponCode
+      });
+      toast.error('Invalid or expired coupon code.');
+      throw new Error('Failed to apply coupon');
     }
   }
 }
