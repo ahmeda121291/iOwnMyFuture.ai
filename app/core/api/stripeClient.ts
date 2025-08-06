@@ -70,6 +70,11 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
     };
   }
 
+  // Dev logging
+  if (import.meta.env.MODE !== 'production') {
+    console.log('[stripeClient] Creating checkout session with params:', params);
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session?.access_token) {
@@ -78,6 +83,11 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
 
   // First, get a CSRF token
   const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
+  
+  if (import.meta.env.MODE !== 'production') {
+    console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
+  }
+
   const csrfResponse = await fetch(csrfTokenUrl, {
     method: 'GET',
     headers: {
@@ -88,6 +98,10 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
   });
 
   if (!csrfResponse.ok) {
+    const errorText = await csrfResponse.text();
+    if (import.meta.env.MODE !== 'production') {
+      console.error('[stripeClient] CSRF token fetch failed:', errorText);
+    }
     throw new Error('Failed to get CSRF token');
   }
 
@@ -96,6 +110,21 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
   // Now create the checkout session with CSRF token
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`;
   
+  const requestBody = {
+    price_id: params.priceId,
+    mode: params.mode,
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+    user_id: params.userId || session.user?.id,
+    email: params.email || session.user?.email,
+    csrf_token: csrfToken,
+  };
+
+  if (import.meta.env.MODE !== 'production') {
+    console.log('[stripeClient] Sending checkout request to:', apiUrl);
+    console.log('[stripeClient] Request body:', { ...requestBody, csrf_token: 'REDACTED' });
+  }
+  
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
@@ -103,22 +132,23 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
       // eslint-disable-next-line @typescript-eslint/naming-convention
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      price_id: params.priceId,
-      mode: params.mode,
-      success_url: params.successUrl,
-      cancel_url: params.cancelUrl,
-      user_id: params.userId || session.user?.id,
-      email: params.email || session.user?.email,
-      csrf_token: csrfToken,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
     const errorData = await response.json();
+    if (import.meta.env.MODE !== 'production') {
+      console.error('[stripeClient] Checkout session creation failed:', errorData);
+    }
     throw new Error(errorData.error || 'Failed to create checkout session');
   }
 
-  return response.json();
+  const result = await response.json();
+  
+  if (import.meta.env.MODE !== 'production') {
+    console.log('[stripeClient] Checkout session created successfully:', result);
+  }
+
+  return result;
 };
 

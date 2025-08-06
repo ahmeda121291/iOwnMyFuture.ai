@@ -64,6 +64,11 @@ export default function UpgradePage() {
   }, [checkAccess]);
 
   const handleUpgrade = async (priceId: string) => {
+    // Dev logging
+    if (import.meta.env.MODE !== 'production') {
+      console.log('[Upgrade] Starting checkout with:', { priceId, userId: user?.id, email: user?.email });
+    }
+
     if (!user) {
       toast.error('Please log in to continue');
       navigate('/auth');
@@ -71,38 +76,81 @@ export default function UpgradePage() {
     }
 
     setLoading(true);
-    toast.loading('Redirecting to checkout...');
+    const loadingToast = toast.loading('Redirecting to checkout...');
     
     try {
       // Get the redirect URL after successful payment
       const redirectAfterUpgrade = sessionStorage.getItem('redirectAfterUpgrade') || '/dashboard';
       
-      // Create Stripe checkout session via Edge Function
-      const { url, sessionId } = await createCheckoutSession({
+      // Prepare checkout session params
+      const checkoutParams = {
         priceId,
         userId: user.id,
         email: user.email,
         successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}&redirect=${encodeURIComponent(redirectAfterUpgrade)}`,
         cancelUrl: `${window.location.origin}/upgrade`,
-        mode: 'subscription'
-      });
+        mode: 'subscription' as const
+      };
 
-      if (url) {
-        // Store session for verification
-        sessionStorage.setItem('checkoutSessionId', sessionId);
-        // Redirect immediately to Stripe Checkout
-        window.location.href = url;
-      } else {
-        throw new Error('No checkout URL received');
+      // Dev logging
+      if (import.meta.env.MODE !== 'production') {
+        console.log('[Upgrade] Creating checkout session with params:', checkoutParams);
       }
+
+      // Create Stripe checkout session via Edge Function
+      const response = await createCheckoutSession(checkoutParams);
+
+      // Dev logging
+      if (import.meta.env.MODE !== 'production') {
+        console.log('[Upgrade] Checkout session response:', response);
+      }
+
+      // Validate response
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid response from checkout service');
+      }
+
+      const { url, sessionId } = response;
+
+      if (!url) {
+        throw new Error('No checkout URL received from Stripe');
+      }
+
+      if (!sessionId) {
+        throw new Error('No session ID received from Stripe');
+      }
+
+      // Store session for verification
+      sessionStorage.setItem('checkoutSessionId', sessionId);
+      
+      // Dismiss loading toast before redirect
+      toast.dismiss(loadingToast);
+      
+      // Dev logging
+      if (import.meta.env.MODE !== 'production') {
+        console.log('[Upgrade] Redirecting to Stripe checkout:', url);
+      }
+
+      // Redirect immediately to Stripe Checkout
+      window.location.href = url;
     } catch (error) {
+      // Log error details
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (import.meta.env.MODE !== 'production') {
+        console.error('[Upgrade] Checkout error:', error);
+      }
+
       errorTracker.trackError(error, {
         component: 'Upgrade',
         action: 'handleUpgrade',
-        priceId
+        priceId,
+        userId: user.id,
+        errorMessage
       });
-      toast.dismiss();
-      toast.error('Failed to start checkout. Please try again.');
+      
+      toast.dismiss(loadingToast);
+      toast.error(`Failed to start checkout: ${errorMessage}`);
       setLoading(false);
     }
   };

@@ -19,20 +19,29 @@ const PricingCard = React.memo(function PricingCard({ product, isPopular = false
 
   const handleSubscribe = async () => {
     setLoading(true);
-    toast.loading('Preparing checkout...');
+    const loadingToast = toast.loading('Preparing checkout...');
     
     try {
       // Get current user for the checkout session
       const user = await getCurrentUser();
       if (!user) {
-        toast.dismiss();
+        toast.dismiss(loadingToast);
         toast.error('Please log in to subscribe');
         window.location.href = '/auth';
         return;
       }
       
+      // Dev logging
+      if (import.meta.env.MODE !== 'production') {
+        console.log('[PricingCard] Starting checkout for:', {
+          priceId: product.priceId,
+          userId: user.id,
+          mode: product.mode
+        });
+      }
+      
       // Create checkout session via Edge Function
-      const { url, sessionId } = await createCheckoutSession({
+      const response = await createCheckoutSession({
         priceId: product.priceId,
         mode: product.mode || 'subscription',
         userId: user.id,
@@ -41,23 +50,48 @@ const PricingCard = React.memo(function PricingCard({ product, isPopular = false
         cancelUrl: `${window.location.origin}/pricing`
       });
       
-      if (url) {
-        // Store session for verification
-        sessionStorage.setItem('checkoutSessionId', sessionId);
-        toast.dismiss();
-        // Redirect immediately to Stripe Checkout
-        window.location.href = url;
-      } else {
-        throw new Error('No checkout URL received');
+      // Validate response
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid response from checkout service');
       }
+      
+      const { url, sessionId } = response;
+      
+      if (!url) {
+        throw new Error('No checkout URL received from Stripe');
+      }
+      
+      if (!sessionId) {
+        throw new Error('No session ID received from Stripe');
+      }
+      
+      // Store session for verification
+      sessionStorage.setItem('checkoutSessionId', sessionId);
+      toast.dismiss(loadingToast);
+      
+      // Dev logging
+      if (import.meta.env.MODE !== 'production') {
+        console.log('[PricingCard] Redirecting to checkout:', url);
+      }
+      
+      // Redirect immediately to Stripe Checkout
+      window.location.href = url;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      if (import.meta.env.MODE !== 'production') {
+        console.error('[PricingCard] Checkout error:', error);
+      }
+      
       errorTracker.trackError(error, {
         component: 'PricingCard',
         action: 'handleSubscribe',
-        productId: product.priceId
+        productId: product.priceId,
+        errorMessage
       });
-      toast.dismiss();
-      toast.error(error instanceof Error ? error.message : 'Failed to start checkout');
+      
+      toast.dismiss(loadingToast);
+      toast.error(`Failed to start checkout: ${errorMessage}`);
     } finally {
       setLoading(false);
     }

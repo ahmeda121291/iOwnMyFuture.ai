@@ -28,6 +28,8 @@ const CheckoutRequestSchema = z.object({
   cancel_url: z.string().url('Invalid cancel URL'),
   mode: z.enum(['payment', 'subscription']),
   csrf_token: z.string().min(32, 'CSRF token required'),
+  user_id: z.string().optional(), // Optional, will use authenticated user if not provided
+  email: z.string().email().optional(), // Optional email override
 });
 
 // Helper to build CORS responses
@@ -62,16 +64,35 @@ Deno.serve(async (req) => {
 
     // Parse and validate request body
     const requestBody = await req.json();
+    
+    // Log incoming request in dev
+    if (Deno.env.get('ENVIRONMENT') !== 'production') {
+      console.log('[stripe-checkout] Incoming request body:', { 
+        ...requestBody, 
+        csrf_token: requestBody.csrf_token ? 'PRESENT' : 'MISSING' 
+      });
+    }
+    
     const validationResult = CheckoutRequestSchema.safeParse(requestBody);
     
     if (!validationResult.success) {
       const errorMessage = validationResult.error.errors
         .map(err => `${err.path.join('.')}: ${err.message}`)
         .join(', ');
+      console.error('[stripe-checkout] Validation failed:', errorMessage);
       return corsResponse({ error: `Validation error: ${errorMessage}` }, 400);
     }
 
-    const { price_id, success_url, cancel_url, mode } = validationResult.data;
+    const { price_id, success_url, cancel_url, mode, user_id, email } = validationResult.data;
+    
+    // Validate that userId from request matches authenticated user if provided
+    if (user_id && user_id !== user.id) {
+      console.error(`[stripe-checkout] User ID mismatch: request=${user_id}, auth=${user.id}`);
+      return corsResponse({ error: 'Unauthorized: user ID mismatch' }, 403);
+    }
+    
+    // Use provided email or fall back to user's email
+    const customerEmail = email || user.email;
 
     const { data: customer, error: getCustomerError } = await supabase
       .from('stripe_customers')
@@ -89,32 +110,42 @@ Deno.serve(async (req) => {
 
     // CRITICAL: Validate price_id exists and is active
     try {
+      if (Deno.env.get('ENVIRONMENT') !== 'production') {
+        console.log(`[stripe-checkout] Validating price: ${price_id}`);
+      }
+      
       const price = await stripe.prices.retrieve(price_id);
       if (!price.active) {
-        console.error(`Attempted to use inactive price: ${price_id}`);
-        return corsResponse({ error: 'Invalid price' }, 400);
+        console.error(`[stripe-checkout] Attempted to use inactive price: ${price_id}`);
+        return corsResponse({ error: 'Invalid or inactive price ID' }, 400);
       }
       
       // Additional validation: ensure price is for the correct product
       if (mode === 'subscription' && price.type !== 'recurring') {
+        console.error(`[stripe-checkout] Price type mismatch: expected recurring, got ${price.type}`);
         return corsResponse({ error: 'Invalid price type for subscription' }, 400);
       }
       if (mode === 'payment' && price.type !== 'one_time') {
+        console.error(`[stripe-checkout] Price type mismatch: expected one_time, got ${price.type}`);
         return corsResponse({ error: 'Invalid price type for one-time payment' }, 400);
       }
+      
+      if (Deno.env.get('ENVIRONMENT') !== 'production') {
+        console.log(`[stripe-checkout] Price validated successfully: ${price.id}`);
+      }
     } catch (priceError) {
-      console.error(`Failed to validate price ${price_id}:`, priceError);
-      return corsResponse({ error: 'Invalid price' }, 400);
+      console.error(`[stripe-checkout] Failed to validate price ${price_id}:`, priceError);
+      return corsResponse({ error: 'Invalid or inaccessible price ID' }, 400);
     }
 
     // Create Stripe customer mapping if none exists
     if (!customer || !customer.customer_id) {
       const newCustomer = await stripe.customers.create({
-        email: user.email,
+        email: customerEmail || user.email,
         metadata: { userId: user.id },
       });
 
-      console.log(`Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
+      console.log(`[stripe-checkout] Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
 
       const { error: createCustomerError } = await supabase.from('stripe_customers').insert({
         user_id: user.id,
@@ -214,36 +245,29 @@ Deno.serve(async (req) => {
       },
     });
 
-    console.log(`Created checkout session ${session.id} for customer ${customerId}`);
+    console.log(`[stripe-checkout] Created checkout session ${session.id} for customer ${customerId}`);
+    
+    if (Deno.env.get('ENVIRONMENT') !== 'production') {
+      console.log(`[stripe-checkout] Session URL: ${session.url}`);
+    }
 
-    return corsResponse({ sessionId: session.id, url: session.url });
+    // IMPORTANT: Return both sessionId and url in the expected format
+    return corsResponse({ 
+      sessionId: session.id, 
+      url: session.url 
+    });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Checkout error: ${errorMessage}`);
+    console.error(`[stripe-checkout] Checkout error:`, error);
+    console.error(`[stripe-checkout] Error message: ${errorMessage}`);
+    
+    // Return more specific error message in development
+    if (Deno.env.get('ENVIRONMENT') !== 'production') {
+      return corsResponse({ 
+        error: `Failed to create checkout session: ${errorMessage}` 
+      }, 500);
+    }
+    
     return corsResponse({ error: 'Failed to create checkout session' }, 500);
   }
 });
-
-type ExpectedType = 'string' | { values: string[] };
-type Expectations<T> = { [K in keyof T]: ExpectedType };
-
-function validateParameters<T extends Record<string, unknown>>(values: T, expected: Expectations<T>): string | undefined {
-  for (const parameter in values) {
-    const expectation = expected[parameter];
-    const value = values[parameter];
-
-    if (expectation === 'string') {
-      if (value == null) {
-        return `Missing required parameter ${parameter}`;
-      }
-      if (typeof value !== 'string') {
-        return `Expected parameter ${parameter} to be a string got ${JSON.stringify(value)}`;
-      }
-    } else {
-      if (!expectation.values.includes(value as string)) {
-        return `Expected parameter ${parameter} to be one of ${expectation.values.join(', ')}`;
-      }
-    }
-  }
-  return undefined;
-}
