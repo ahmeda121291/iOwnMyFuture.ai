@@ -27,10 +27,30 @@ export default function AuthPage() {
     checkUser();
   }, [checkUser]);
 
-  const handleAuthSuccess = () => {
+  const handleAuthSuccess = async () => {
     // Add a small delay to ensure auth state is propagated
-    setTimeout(() => {
-      navigate('/dashboard');
+    setTimeout(async () => {
+      // Check if user has Pro subscription
+      const session = await getSession();
+      if (session) {
+        const { getUserSubscription } = await import('../core/api/supabase');
+        const subscription = await getUserSubscription(session.user.id);
+        
+        // Check if they have an active subscription
+        const hasProAccess = 
+          subscription && 
+          subscription.subscription_status === 'active' &&
+          subscription.price_id &&
+          !subscription.cancel_at_period_end;
+        
+        if (hasProAccess) {
+          // Has Pro, go to dashboard
+          navigate('/dashboard');
+        } else {
+          // No Pro subscription, redirect to upgrade page
+          navigate('/upgrade');
+        }
+      }
     }, 100);
   };
 

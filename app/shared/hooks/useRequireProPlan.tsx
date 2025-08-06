@@ -22,9 +22,9 @@ interface UseRequireProPlanResult {
  */
 export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRequireProPlanResult {
   const {
-    redirectTo = '/pricing',
+    redirectTo = '/upgrade',
     showToast = true,
-    toastMessage = 'Upgrade to Pro to access this feature'
+    toastMessage = 'MyFutureSelf is a Pro-only platform. Subscribe to unlock all features.'
   } = options;
   
   const navigate = useNavigate();
@@ -57,14 +57,26 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
         setIsProActive(hasProAccess);
         
         if (!hasProAccess) {
-          if (showToast) {
-            toast.error(toastMessage);
-          }
-          
           // Store the intended destination for after upgrade
           sessionStorage.setItem('redirectAfterUpgrade', window.location.pathname);
           
-          // Redirect to pricing page
+          // Check if this is a new user (created within last 5 minutes)
+          const userCreatedAt = new Date(session.user.created_at || Date.now());
+          const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+          const isNewUser = userCreatedAt > fiveMinutesAgo;
+          
+          if (showToast) {
+            if (isNewUser) {
+              toast('Welcome! Subscribe to Pro to start your journey.', {
+                icon: '🚀',
+                duration: 5000
+              });
+            } else {
+              toast.error(toastMessage);
+            }
+          }
+          
+          // Redirect to upgrade page
           navigate(redirectTo);
         }
       } catch (_error) {

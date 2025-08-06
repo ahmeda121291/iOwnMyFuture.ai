@@ -10,8 +10,10 @@ import {
   Mail,
   Gift
 } from 'lucide-react';
+import { supabase, getSession } from '../core/api/supabase';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
+import toast from 'react-hot-toast';
 
 interface SessionDetails {
   sessionId: string;
@@ -27,24 +29,64 @@ export default function SuccessPage() {
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   
   const sessionId = searchParams.get('session_id');
+  const redirectPath = searchParams.get('redirect');
 
   useEffect(() => {
-    // Simulate a brief loading period to show the success animation
-    const timer = setTimeout(() => {
+    confirmPaymentAndUpdateSubscription();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  const confirmPaymentAndUpdateSubscription = async () => {
+    if (!sessionId) {
       setLoading(false);
-      if (sessionId) {
-        // In a real app, you'd fetch session details from your backend
+      toast.error('No session ID found');
+      navigate('/dashboard');
+      return;
+    }
+
+    try {
+      // Get current user session
+      const session = await getSession();
+      if (!session) {
+        toast.error('Please log in to continue');
+        navigate('/auth');
+        return;
+      }
+
+      // Call edge function to verify payment and update subscription
+      const { data, error } = await supabase.functions.invoke('confirm-payment', {
+        body: { sessionId, userId: session.user.id }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
         setSessionDetails({
           sessionId,
-          amount: 180, // This would come from the session
-          plan: 'Pro Annual',
-          email: 'user@example.com'
+          amount: data.amount || 180,
+          plan: data.plan || 'Pro',
+          email: session.user.email || ''
         });
+        
+        // Clear the redirect path from session storage
+        sessionStorage.removeItem('redirectAfterUpgrade');
+        
+        toast.success('Payment confirmed! Your Pro subscription is now active.');
+      } else {
+        throw new Error('Payment confirmation failed');
       }
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [sessionId]);
+    } catch (error) {
+      console.error('Error confirming payment:', error);
+      toast.error('Failed to confirm payment. Please contact support.');
+      
+      // Still redirect to dashboard after a delay
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const nextSteps = [
     {

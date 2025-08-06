@@ -42,7 +42,34 @@ const getStripe = async () => {
 
 export default getStripe;
 
-export const createCheckoutSession = async (priceId: string, mode: 'subscription' | 'payment' = 'subscription') => {
+interface CreateCheckoutSessionOptions {
+  priceId: string;
+  userId?: string;
+  email?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+  mode?: 'subscription' | 'payment';
+}
+
+export const createCheckoutSession = async (options: CreateCheckoutSessionOptions | string) => {
+  // Handle legacy string parameter
+  let params: CreateCheckoutSessionOptions;
+  if (typeof options === 'string') {
+    params = {
+      priceId: options,
+      mode: 'subscription',
+      successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${window.location.origin}/pricing`
+    };
+  } else {
+    params = {
+      mode: 'subscription',
+      successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${window.location.origin}/pricing`,
+      ...options
+    };
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session?.access_token) {
@@ -59,10 +86,12 @@ export const createCheckoutSession = async (priceId: string, mode: 'subscription
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      price_id: priceId,
-      mode,
-      success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${window.location.origin}/pricing`,
+      price_id: params.priceId,
+      mode: params.mode,
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      user_id: params.userId || session.user?.id,
+      email: params.email || session.user?.email,
     }),
   });
 

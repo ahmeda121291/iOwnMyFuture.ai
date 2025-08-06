@@ -13,6 +13,7 @@ import Loader from './shared/components/Loader';
 import LandingPage from './pages/index';
 import AuthPage from './pages/Auth';
 import PricingPage from './pages/Pricing';
+import UpgradePage from './pages/Upgrade';
 import SuccessPage from './pages/Success';
 import DashboardPage from './pages/Dashboard';
 import JournalPage from './pages/Journal';
@@ -82,6 +83,12 @@ function AppRouter() {
             <Route path="/pricing" element={
               <AppLayout>
                 <PricingPage />
+              </AppLayout>
+            } />
+            
+            <Route path="/upgrade" element={
+              <AppLayout>
+                <UpgradePage />
               </AppLayout>
             } />
             
