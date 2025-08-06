@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, Filter, Calendar, TrendingUp, Award, Target, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { errorTracker } from '../shared/utils/errorTracking';
-import { getCurrentUser, getSession } from '../core/api/supabase';
+import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import { summarizeJournalEntry } from '../core/api/openai';
-import { type User, type JournalEntry } from '../core/types';
+import { type JournalEntry } from '../core/types';
 import { useJournalEntries, useCreateJournalEntry, useUpdateJournalEntry, useDeleteJournalEntry } from '../shared/hooks/queries/useJournalQueries';
 import JournalCalendar from '../features/journal/JournalCalendar';
 import JournalEntryForm from '../features/journal/JournalEntryForm';
@@ -20,8 +20,10 @@ import Loader from '../shared/components/Loader';
 const PAGE_SIZE = 10;
 
 export default function JournalPage() {
+  // Use Pro plan check hook
+  const { isLoading: proLoading, user } = useRequireProPlan();
+  
   // State
-  const [user, setUser] = useState<User | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [showFullScreenEditor, setShowFullScreenEditor] = useState(false);
@@ -30,7 +32,7 @@ export default function JournalPage() {
   const [filterMode, setFilterMode] = useState<'all' | 'month' | 'week'>('month');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
 
   // Calculate date range based on filter mode
   const dateRange = useMemo(() => {
@@ -72,31 +74,6 @@ export default function JournalPage() {
   const createMutation = useCreateJournalEntry();
   const updateMutation = useUpdateJournalEntry();
   const deleteMutation = useDeleteJournalEntry();
-
-  // Initialize page
-  const initializePage = useCallback(async () => {
-    try {
-      // First check if we have a valid session with user ID
-      const session = await getSession();
-      if (!session || !session.user?.id) {
-        navigate('/auth');
-        return;
-      }
-      
-      const userData = await getCurrentUser();
-      if (!userData) {
-        navigate('/auth');
-        return;
-      }
-      setUser(userData);
-    } catch (_error) {
-      navigate('/auth');
-    }
-  }, [navigate]);
-
-  useEffect(() => {
-    initializePage();
-  }, [initializePage]);
 
   // Calculate streaks
   const { journalStreak, longestStreak } = useMemo(() => {
@@ -256,7 +233,7 @@ export default function JournalPage() {
   }).length;
 
   // Show loading state while user is being loaded
-  if (!user) {
+  if (!user || proLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center pt-20">
         <div className="text-center">

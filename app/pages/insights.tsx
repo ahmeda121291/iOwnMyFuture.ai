@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, 
   Calendar, 
@@ -11,9 +10,10 @@ import {
   Heart,
   Zap
 } from 'lucide-react';
-import { getCurrentUser, supabase, getSession } from '../core/api/supabase';
+import { supabase } from '../core/api/supabase';
 import { generateInsightReport } from '../core/api/openai';
-import { type User, type JournalEntry } from '../core/types';
+import { type JournalEntry } from '../core/types';
+import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import ProgressChartLazy from '../features/insights/ProgressChartLazy';
 import InsightCard from '../features/insights/InsightCard';
 import MoodTrendChartLazy from '../features/insights/MoodTrendChartLazy';
@@ -34,14 +34,15 @@ interface MoodboardUpdate {
 }
 
 export default function InsightsPage() {
-  const [, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Use Pro plan check hook
+  const { isProActive, isLoading: proLoading, user } = useRequireProPlan();
+  
   const [aiReport, setAiReport] = useState<string>('');
   const [generatingReport, setGeneratingReport] = useState(false);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [moodboards, setMoodboards] = useState<MoodboardUpdate[]>([]);
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'quarter'>('month');
-  const navigate = useNavigate();
+  const [dataLoading, setDataLoading] = useState(true);
 
   const generateAIInsights = useCallback(async (entries: JournalEntry[]) => {
     if (generatingReport) {return;}
@@ -67,14 +68,12 @@ export default function InsightsPage() {
     }
   }, [generatingReport]);
 
-  const loadUserData = useCallback(async (userId: string) => {
+  const loadUserData = useCallback(async () => {
+    if (!user?.id) {
+      return;
+    }
+    
     try {
-      // Verify we have a valid user ID before querying
-      if (!userId) {
-        // No user ID - expected for unauthenticated access
-        return;
-      }
-
       const daysBack = timeframe === 'week' ? 7 : timeframe === 'month' ? 30 : 90;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysBack);
@@ -83,7 +82,7 @@ export default function InsightsPage() {
       const { data: entries, error: entriesError } = await supabase
         .from('journal_entries')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .gte('entry_date', cutoffDate.toISOString().split('T')[0])
         .order('entry_date', { ascending: true });
 
@@ -94,7 +93,7 @@ export default function InsightsPage() {
       const { data: moodboardData, error: moodboardError } = await supabase
         .from('moodboards')
         .select('id, updated_at')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .gte('updated_at', cutoffDate.toISOString());
         
       if (moodboardError) {
@@ -109,40 +108,17 @@ export default function InsightsPage() {
       }
     } catch (error) {
       errorTracker.trackError(error, { component: 'Insights', action: 'loadUserData' });
-    }
-  }, [timeframe, generateAIInsights]);
-
-  const initializePage = useCallback(async () => {
-    try {
-      // First check if we have a valid session with user ID
-      const session = await getSession();
-      if (!session || !session.user?.id) {
-        navigate('/auth');
-        return;
-      }
-      
-      const userData = await getCurrentUser();
-      if (!userData) {
-        navigate('/auth');
-        return;
-      }
-      setUser(userData);
-      
-      // Only load data if we have a confirmed user ID
-      if (session.user.id) {
-        await loadUserData(session.user.id);
-      }
-    } catch (error) {
-      errorTracker.trackError(error, { component: 'Insights', action: 'loadUser' });
-      navigate('/auth');
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
-  }, [navigate, loadUserData]);
+  }, [user?.id, timeframe, generateAIInsights]);
 
+  // Load data when user is available
   useEffect(() => {
-    initializePage();
-  }, [initializePage]);
+    if (user?.id) {
+      loadUserData();
+    }
+  }, [user?.id, loadUserData]);
 
   // Use analytics utilities for data processing
   const progressData = generateProgressData(journalEntries, moodboards, timeframe);
@@ -157,7 +133,7 @@ export default function InsightsPage() {
     // console.info('Export feature coming soon');
   };
 
-  if (loading) {
+  if (proLoading || dataLoading || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center pt-20">
         <div className="text-center">
@@ -166,6 +142,10 @@ export default function InsightsPage() {
         </div>
       </div>
     );
+  }
+
+  if (!isProActive) {
+    return null; // Will redirect via the hook
   }
 
   return (

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { 
   CheckCircle, 
@@ -10,7 +10,8 @@ import {
   Mail,
   Gift
 } from 'lucide-react';
-import { supabase, getSession } from '../core/api/supabase';
+import { supabase } from '../core/api/supabase';
+import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import toast from 'react-hot-toast';
@@ -24,6 +25,12 @@ interface SessionDetails {
 }
 
 export default function SuccessPage() {
+  // Use Pro plan check hook - don't redirect on success page
+  const { user } = useRequireProPlan({ 
+    redirectTo: '/upgrade',
+    showToast: false // Don't show toast on success page
+  });
+  
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -31,12 +38,7 @@ export default function SuccessPage() {
   
   const sessionId = searchParams.get('session_id');
 
-  useEffect(() => {
-    confirmPaymentAndUpdateSubscription();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
-
-  const confirmPaymentAndUpdateSubscription = async () => {
+  const confirmPaymentAndUpdateSubscription = useCallback(async () => {
     if (!sessionId) {
       setLoading(false);
       toast.error('No session ID found');
@@ -44,18 +46,16 @@ export default function SuccessPage() {
       return;
     }
 
+    if (!user?.id) {
+      // Wait for user to be loaded
+      return;
+    }
+
     try {
-      // Get current user session
-      const session = await getSession();
-      if (!session) {
-        toast.error('Please log in to continue');
-        navigate('/auth');
-        return;
-      }
 
       // Call edge function to verify payment and update subscription
       const { data, error } = await supabase.functions.invoke('confirm-payment', {
-        body: { sessionId, userId: session.user.id }
+        body: { sessionId, userId: user.id }
       });
 
       if (error) {
@@ -67,7 +67,7 @@ export default function SuccessPage() {
           sessionId,
           amount: data.amount || 180,
           plan: data.plan || 'Pro',
-          email: session.user.email || ''
+          email: user.email || ''
         });
         
         // Clear the redirect path from session storage
@@ -88,7 +88,13 @@ export default function SuccessPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sessionId, user?.id, user?.email, navigate]);
+
+  useEffect(() => {
+    if (user?.id && sessionId) {
+      confirmPaymentAndUpdateSubscription();
+    }
+  }, [user?.id, sessionId, confirmPaymentAndUpdateSubscription]);
 
   const nextSteps = [
     {

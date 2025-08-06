@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, BookOpen, TrendingUp, Crown, Plus, AlertCircle } from 'lucide-react';
-import { getCurrentUser, getUserSubscription, supabase, getSession } from '../core/api/supabase';
+import { supabase } from '../core/api/supabase';
+import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
@@ -9,15 +10,6 @@ import MoodAnalyticsPanelLazy from '../features/insights/MoodAnalyticsPanelLazy'
 import FirstTimeChecklist from '../features/Onboarding/FirstTimeChecklist';
 
 // Types
-interface User {
-  id: string;
-  email?: string;
-  created_at: string;
-}
-
-interface Subscription {
-  subscription_status: string;
-}
 
 interface Metrics {
   boardCount: number;
@@ -39,8 +31,7 @@ const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
 export default function DashboardPage() {
   // Custom hooks and state at top
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const { isProActive, isLoading: proLoading, user } = useRequireProPlan();
   const [metrics, setMetrics] = useState<Metrics>({
     boardCount: 0,
     entryCount: 0,
@@ -54,31 +45,18 @@ export default function DashboardPage() {
     try {
       setError(null);
       
-      // First check if we have a valid session
-      const session = await getSession();
-      if (!session || !session.user?.id) {
-        navigate('/auth');
+      // User and subscription are already handled by useRequireProPlan hook
+      if (!user?.id) {
         return;
       }
-      
-      const userData = await getCurrentUser();
-      if (!userData) {
-        navigate('/auth');
-        return;
-      }
-      setUser(userData);
-
-      // Fetch subscription data
-      const subscriptionData = await getUserSubscription();
-      setSubscription(subscriptionData);
 
       // Fetch real metrics from Supabase with proper error handling
       // Only query if we have a confirmed user ID
-      if (session.user.id) {
+      if (user.id) {
         try {
           const [boardsResponse, entriesResponse] = await Promise.all([
-            supabase.from('moodboards').select('id').eq('user_id', session.user.id),
-            supabase.from('journal_entries').select('id').eq('user_id', session.user.id)
+            supabase.from('moodboards').select('id').eq('user_id', user.id),
+            supabase.from('journal_entries').select('id').eq('user_id', user.id)
           ]);
 
         const boardCount = boardsResponse.data?.length || 0;
@@ -86,7 +64,7 @@ export default function DashboardPage() {
         
         // Calculate days active since account creation
         const daysActive = Math.ceil(
-          (Date.now() - new Date(userData.created_at).getTime()) / MILLISECONDS_PER_DAY
+          (Date.now() - new Date(user.created_at).getTime()) / MILLISECONDS_PER_DAY
         );
         
           setMetrics({
@@ -114,12 +92,12 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [navigate]);
+  }, [navigate, user?.created_at, user?.id]);
 
   // Effect hooks
   useEffect(() => {
     loadUserData();
-  }, [loadUserData]);
+  }, [user, loadUserData]);
 
   // Computed values
   const userName = useMemo(() => {
@@ -127,8 +105,8 @@ export default function DashboardPage() {
   }, [user?.email]);
 
   const hasActiveSubscription = useMemo(() => {
-    return subscription && ['active', 'trialing'].includes(subscription.subscription_status);
-  }, [subscription]);
+    return isProActive;
+  }, [isProActive]);
 
   const quickActions = useMemo((): QuickAction[] => [
     {
@@ -163,7 +141,7 @@ export default function DashboardPage() {
   }, [navigate]);
 
   // Early returns for loading/error states
-  if (loading) {
+  if (loading || proLoading) {
     return <LoadingState />;
   }
 

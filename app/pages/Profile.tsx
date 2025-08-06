@@ -17,8 +17,9 @@ import {
   Zap,
   Check
 } from 'lucide-react';
-import { getCurrentUser, signOut, supabase, getSession } from '../core/api/supabase';
-import { type User, type JournalEntry } from '../core/types';
+import { signOut, supabase } from '../core/api/supabase';
+import { type JournalEntry } from '../core/types';
+import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import ProfileHeader from '../features/Profile/ProfileHeader';
 import SocialConnections from '../features/Profile/SocialConnections';
 import AccountSettings from '../features/Profile/AccountSettings';
@@ -59,27 +60,28 @@ interface ActivityItem {
 }
 
 export default function ProfilePage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Use Pro plan check hook
+  const { isProActive, isLoading: proLoading, user } = useRequireProPlan();
+  
+  const [dataLoading, setDataLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings' | 'connections'>('overview');
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
   const navigate = useNavigate();
 
-  const loadUserData = useCallback(async (userId: string) => {
+  const loadUserData = useCallback(async () => {
+    if (!user?.id) {
+      return;
+    }
+    
     try {
-      // Verify we have a valid user ID before querying
-      if (!userId) {
-        // No user ID - expected for unauthenticated access
-        return;
-      }
 
       // Load journal entries with error handling
       const { data: entries, error } = await supabase
         .from('journal_entries')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -135,7 +137,7 @@ export default function ProfilePage() {
       const { data: moodboards, error: moodboardError } = await supabase
         .from('moodboards')
         .select('updated_at')
-        .eq('user_id', userId);
+        .eq('user_id', user.id);
       
       if (moodboardError) {
         // Continue without moodboards
@@ -216,39 +218,17 @@ export default function ProfilePage() {
       setRecentActivity(activities.slice(0, 5));
     } catch (error) {
       errorTracker.trackError(error, { component: 'Profile', action: 'loadUserData' });
-    }
-  }, [user?.created_at]);
-
-  const initializePage = useCallback(async () => {
-    try {
-      // First check if we have a valid session with user ID
-      const session = await getSession();
-      if (!session || !session.user?.id) {
-        navigate('/auth');
-        return;
-      }
-      
-      const userData = await getCurrentUser();
-      if (!userData) {
-        navigate('/auth');
-        return;
-      }
-      setUser(userData);
-      
-      // Only load data if we have a confirmed user ID
-      if (session.user.id) {
-        await loadUserData(session.user.id);
-      }
-    } catch (_error) {
-      navigate('/auth');
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
-  }, [navigate, loadUserData]);
+  }, [user?.id, user?.created_at]);
 
+  // Load data when user is available
   useEffect(() => {
-    initializePage();
-  }, [initializePage]);
+    if (user?.id) {
+      loadUserData();
+    }
+  }, [user?.id, loadUserData]);
 
   const _calculateStreak = (entries: JournalEntry[]): number => {
     if (entries.length === 0) {return 0;}
@@ -391,7 +371,7 @@ export default function ProfilePage() {
     }
   };
 
-  if (loading) {
+  if (proLoading || dataLoading || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center pt-20">
         <div className="text-center">
@@ -400,6 +380,10 @@ export default function ProfilePage() {
         </div>
       </div>
     );
+  }
+
+  if (!isProActive) {
+    return null; // Will redirect via the hook
   }
 
   if (!userStats) {

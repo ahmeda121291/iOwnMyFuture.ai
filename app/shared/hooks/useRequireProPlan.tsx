@@ -12,7 +12,9 @@ interface UseRequireProPlanOptions {
 interface UseRequireProPlanResult {
   isProActive: boolean;
   isLoading: boolean;
-  subscription: any;
+  subscription: { subscription_status: string; price_id: string; cancel_at_period_end: boolean } | null;
+  user: { id: string; email?: string; created_at: string } | null;
+  checkProAccess: () => Promise<void>;
 }
 
 /**
@@ -31,6 +33,7 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
   const [isProActive, setIsProActive] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [subscription, setSubscription] = useState<{ subscription_status: string; price_id: string; cancel_at_period_end: boolean } | null>(null);
+  const [user, setUser] = useState<{ id: string; email?: string; created_at: string } | null>(null);
 
   const checkProAccess = useCallback(async () => {
       try {
@@ -41,6 +44,8 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
           navigate('/auth');
           return;
         }
+
+        setUser(session.user);
 
         // Get user subscription status
         const userSubscription = await getUserSubscription(session.user.id);
@@ -98,7 +103,9 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
   return {
     isProActive,
     isLoading,
-    subscription
+    subscription,
+    user,
+    checkProAccess
   };
 }
 
@@ -106,7 +113,7 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
  * HOC version for wrapping components
  */
 export function withProPlan<P extends object>(
-  Component: React.ComponentType<P>,
+  component: React.ComponentType<P>,
   options?: UseRequireProPlanOptions
 ): React.FC<P> {
   return function ProPlanProtectedComponent(props: P) {
@@ -124,6 +131,6 @@ export function withProPlan<P extends object>(
       return null; // Will redirect via the hook
     }
     
-    return <Component {...props} />;
+    return React.createElement(component, props);
   };
 }
