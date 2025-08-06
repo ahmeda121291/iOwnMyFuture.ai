@@ -18,6 +18,8 @@ import ProgressChartLazy from '../features/insights/ProgressChartLazy';
 import InsightCard from '../features/insights/InsightCard';
 import MoodTrendChartLazy from '../features/insights/MoodTrendChartLazy';
 import Button from '../shared/components/Button';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../shared/utils/errorTracking';
 import Loader from '../shared/components/Loader';
 import {
   generateProgressData,
@@ -57,7 +59,8 @@ export default function InsightsPage() {
         setAiReport("Start journaling regularly to get personalized AI insights about your progress and patterns!");
       }
     } catch (error) {
-      console.error('Error generating AI insights:', error);
+      errorTracker.trackError(error, { component: 'Insights', action: 'generateAIInsights' });
+      toast.error('Failed to generate insights. Please try again.');
       setAiReport("Unable to generate insights at the moment. Please try again later.");
     } finally {
       setGeneratingReport(false);
@@ -68,7 +71,7 @@ export default function InsightsPage() {
     try {
       // Verify we have a valid user ID before querying
       if (!userId) {
-        console.warn('No user ID provided for data loading');
+        // No user ID - expected for unauthenticated access
         return;
       }
 
@@ -105,7 +108,7 @@ export default function InsightsPage() {
         await generateAIInsights(entries);
       }
     } catch (error) {
-      console.error('Error loading user data:', error);
+      errorTracker.trackError(error, { component: 'Insights', action: 'loadUserData' });
     }
   }, [timeframe, generateAIInsights]);
 
@@ -130,7 +133,7 @@ export default function InsightsPage() {
         await loadUserData(session.user.id);
       }
     } catch (error) {
-      console.error('Error loading user:', error);
+      errorTracker.trackError(error, { component: 'Insights', action: 'loadUser' });
       navigate('/auth');
     } finally {
       setLoading(false);

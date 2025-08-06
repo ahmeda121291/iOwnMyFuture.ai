@@ -5,6 +5,7 @@ import { supabase } from '../../core/api/supabase';
 import { updateOnboardingProgress } from '../../core/api/onboarding';
 import { CreateJournalEntrySchema, validateData } from '../../shared/validation/schemas';
 import { useCSRFToken, createSecureFormData } from '../../shared/security/csrf';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 // Typed Props interface
 interface JournalEntryFormProps {
@@ -157,7 +158,7 @@ export default function JournalEntryForm({
         await updateOnboardingProgress('created_first_journal', true);
       }
     } catch (error) {
-      console.error('Error saving journal entry:', error);
+      errorTracker.trackError(error, { component: 'JournalEntryForm', action: 'saveEntry' });
       setValidationErrors(['Failed to save journal entry. Please try again.']);
     } finally {
       setSaving(false);
@@ -196,7 +197,7 @@ export default function JournalEntryForm({
         await updateOnboardingProgress('generated_ai_summary', true);
       }
     } catch (error) {
-      console.error('Error generating summary:', error);
+      errorTracker.trackError(error, { component: 'JournalEntryForm', action: 'generateSummary' });
       alert('Failed to generate AI summary. Please try again.');
     } finally {
       setGeneratingSummary(false);

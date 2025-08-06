@@ -25,6 +25,8 @@ import AccountSettings from '../features/Profile/AccountSettings';
 import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../shared/utils/errorTracking';
 
 interface UserStats {
   memberSince: string;
@@ -69,7 +71,7 @@ export default function ProfilePage() {
     try {
       // Verify we have a valid user ID before querying
       if (!userId) {
-        console.warn('No user ID provided for data loading');
+        // No user ID - expected for unauthenticated access
         return;
       }
 
@@ -213,7 +215,7 @@ export default function ProfilePage() {
 
       setRecentActivity(activities.slice(0, 5));
     } catch (error) {
-      console.error('Error loading user data:', error);
+      errorTracker.trackError(error, { component: 'Profile', action: 'loadUserData' });
     }
   }, [user?.created_at]);
 
@@ -383,7 +385,8 @@ export default function ProfilePage() {
         await signOut();
         navigate('/');
       } catch (error) {
-        console.error('Error signing out:', error);
+        errorTracker.trackError(error, { component: 'Profile', action: 'signOut' });
+        toast.error('Failed to sign out. Please try again.');
       }
     }
   };

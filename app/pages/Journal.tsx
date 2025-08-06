@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, BookOpen, Filter, Calendar, TrendingUp, Award, Target, ChevronLeft, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { errorTracker } from '../shared/utils/errorTracking';
 import { getCurrentUser, getSession } from '../core/api/supabase';
 import { summarizeJournalEntry } from '../core/api/openai';
 import { type User, type JournalEntry } from '../core/types';
@@ -178,7 +179,7 @@ export default function JournalPage() {
             await summarizeJournalEntry(newEntry.id, content);
             await refetchEntries();
           } catch (_error) {
-            console.error('Error generating summary:', error);
+            errorTracker.trackError(error, { component: 'Journal', action: 'generateSummary' });
           }
         }
       }

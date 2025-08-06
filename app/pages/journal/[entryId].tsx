@@ -16,6 +16,8 @@ import JournalEntryForm from '../../features/journal/JournalEntryForm';
 import Button from '../../shared/components/Button';
 import Modal from '../../shared/components/Modal';
 import Loader from '../../shared/components/Loader';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 export default function JournalEntryPage() {
   const { entryId } = useParams();
@@ -51,7 +53,7 @@ export default function JournalEntryPage() {
         }
         setEntry(data);
       } catch (error) {
-        console.error('Error loading entry:', error);
+        errorTracker.trackError(error, { component: 'JournalEntry', action: 'loadEntry' });
         navigate('/journal');
       } finally {
         setLoading(false);
@@ -91,11 +93,11 @@ export default function JournalEntryPage() {
           setEntry((prev) => prev ? ({ ...prev, ai_summary: aiSummary }) : prev);
         }
       } catch (aiError) {
-        console.warn('AI summarization failed:', aiError);
+        // AI summarization is optional, silently fail
       }
     } catch (error) {
-      console.error('Error saving entry:', error);
-      alert('Failed to save changes. Please try again.');
+      errorTracker.trackError(error, { component: 'JournalEntry', action: 'saveEntry' });
+      toast.error('Failed to save changes. Please try again.');
     }
   };
 
@@ -116,8 +118,8 @@ export default function JournalEntryPage() {
 
       navigate('/journal');
     } catch (error) {
-      console.error('Error deleting entry:', error);
-      alert('Failed to delete entry. Please try again.');
+      errorTracker.trackError(error, { component: 'JournalEntry', action: 'deleteEntry' });
+      toast.error('Failed to delete entry. Please try again.');
     }
   };
 
@@ -137,8 +139,8 @@ export default function JournalEntryPage() {
 
       setEntry((prev) => prev ? ({ ...prev, ai_summary: aiSummary }) : prev);
     } catch (error) {
-      console.error('Error regenerating summary:', error);
-      alert('Failed to regenerate AI summary. Please try again.');
+      errorTracker.trackError(error, { component: 'JournalEntry', action: 'regenerateSummary' });
+      toast.error('Failed to regenerate AI summary. Please try again.');
     } finally {
       setRegeneratingSummary(false);
     }

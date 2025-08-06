@@ -16,6 +16,8 @@ import {
 import { getCurrentUser, getSession } from '../core/api/supabase';
 import { generateMoodboard, generateAdvancedMoodboard } from '../core/api/openai';
 import { updateOnboardingProgress } from '../core/api/onboarding';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../shared/utils/errorTracking';
 import { type User, type Moodboard, type MoodboardElement } from '../core/types';
 import { 
   useMoodboards, 
@@ -146,8 +148,8 @@ export default function MoodboardPage() {
       
       await updateOnboardingProgress('created_first_moodboard', true);
     } catch (error) {
-      console.error('Error creating moodboard:', error);
-      alert('Failed to create moodboard. Please try again.');
+      errorTracker.trackError(error, { component: 'Moodboard', action: 'createMoodboard' });
+      toast.error('Failed to create moodboard. Please try again.');
     }
   }, [user, createMutation]);
 
@@ -163,8 +165,8 @@ export default function MoodboardPage() {
       setIsEditing(false);
       alert('Moodboard saved successfully!');
     } catch (error) {
-      console.error('Error saving moodboard:', error);
-      alert('Failed to save moodboard. Please try again.');
+      errorTracker.trackError(error, { component: 'Moodboard', action: 'saveMoodboard' });
+      toast.error('Failed to save moodboard. Please try again.');
     }
   }, [currentMoodboardId, elements, updateElementsMutation]);
 
@@ -181,8 +183,8 @@ export default function MoodboardPage() {
       
       setShowMoodboardList(false);
     } catch (error) {
-      console.error('Error deleting moodboard:', error);
-      alert('Failed to delete moodboard. Please try again.');
+      errorTracker.trackError(error, { component: 'Moodboard', action: 'deleteMoodboard' });
+      toast.error('Failed to delete moodboard. Please try again.');
     }
   }, [currentMoodboardId, deleteMutation]);
 
@@ -232,8 +234,8 @@ export default function MoodboardPage() {
       setShowAISetup(false);
       setIsEditing(true);
     } catch (error) {
-      console.error('Error generating AI moodboard:', error);
-      alert('Failed to generate AI moodboard. Please try again.');
+      errorTracker.trackError(error, { component: 'Moodboard', action: 'generateAIMoodboard' });
+      toast.error('Failed to generate AI moodboard. Please try again.');
     } finally {
       setGeneratingAI(false);
     }

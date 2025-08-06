@@ -14,6 +14,7 @@ import { supabase, getSession } from '../core/api/supabase';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import toast from 'react-hot-toast';
+import { errorTracker } from '../shared/utils/errorTracking';
 
 interface SessionDetails {
   sessionId: string;
@@ -77,7 +78,7 @@ export default function SuccessPage() {
         throw new Error('Payment confirmation failed');
       }
     } catch (error) {
-      console.error('Error confirming payment:', error);
+      errorTracker.trackError(error, { component: 'Success', action: 'confirmPayment' });
       toast.error('Failed to confirm payment. Please contact support.');
       
       // Still redirect to dashboard after a delay
