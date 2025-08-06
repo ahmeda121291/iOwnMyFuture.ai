@@ -337,7 +337,7 @@ export default function Navbar() {
           <div className="flex items-center space-x-3">
             <button 
               onClick={() => navigate('/dashboard')}
-              className="px-6 py-2 bg-gradient-to-r from-primary to-accent text-white rounded-full font-medium hover:shadow-lg transition-all duration-200"
+              className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-semibold shadow-md hover:shadow-xl hover:scale-105 transform transition-all duration-200"
             >
               Enter Dashboard
             </button>
@@ -349,7 +349,7 @@ export default function Navbar() {
               <div className="container mx-auto px-4 py-4">
                 <button 
                   onClick={() => { navigate('/dashboard'); setIsMenuOpen(false) }}
-                  className="w-full px-6 py-3 bg-gradient-to-r from-primary to-accent text-white rounded-full font-medium"
+                  className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-full font-semibold shadow-md"
                 >
                   Enter Dashboard
                 </button>
