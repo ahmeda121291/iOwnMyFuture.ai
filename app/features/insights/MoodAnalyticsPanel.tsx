@@ -51,6 +51,7 @@ export default function MoodAnalyticsPanel() {
 
   useEffect(() => {
     loadMoodAnalytics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadMoodAnalytics = async () => {

@@ -13,6 +13,7 @@ export default function AdminRoute({ children }: AdminRouteProps) {
 
   useEffect(() => {
     checkAdminAccess();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkAdminAccess = async () => {

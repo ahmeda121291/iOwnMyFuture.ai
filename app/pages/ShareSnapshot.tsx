@@ -15,6 +15,7 @@ export default function ShareSnapshot() {
     if (id) {
       loadSnapshot(id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadSnapshot = async (snapshotId: string) => {
