@@ -268,8 +268,8 @@ class ErrorTracker {
   /**
    * Start a performance transaction
    */
-  startTransaction(name: string, op: string = 'navigation'): Sentry.Transaction {
-    return Sentry.startTransaction({ name, op });
+  startTransaction(name: string, op: string = 'navigation'): void {
+    Sentry.startSpan({ name, op }, () => {});
   }
 
   /**
@@ -334,13 +334,18 @@ class ErrorTracker {
     comments: string;
     eventId?: string;
   }): void {
-    const user = Sentry.getCurrentHub().getScope()?.getUser();
+    const user = Sentry.getCurrentScope().getUser();
     
-    Sentry.captureUserFeedback({
+    const feedback = {
       event_id: options.eventId || Sentry.lastEventId() || '',
       name: options.name || user?.username || 'Anonymous',
       email: options.email || user?.email || this.userEmail || 'unknown@example.com',
-      comments: options.comments,
+      comments: options.comments
+    };
+    
+    // Sentry v10 doesn't have captureUserFeedback, use captureMessage as workaround
+    Sentry.captureMessage(`User Feedback: ${options.comments}`, 'info', {
+      extra: feedback
     });
   }
 

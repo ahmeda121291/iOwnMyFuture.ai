@@ -56,7 +56,7 @@ function App() {
             },
           }}
         />
-        {process.env.NODE_ENV === 'development' && (
+        {import.meta.env.DEV && (
           <ReactQueryDevtools initialIsOpen={false} />
         )}
       </QueryClientProvider>

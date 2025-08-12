@@ -1,5 +1,4 @@
 import * as Sentry from '@sentry/react';
-import { BrowserTracing } from '@sentry/react';
 
 /**
  * Initialize Sentry error tracking
@@ -18,30 +17,11 @@ export function initSentry() {
       
       // Integration configurations
       integrations: [
-        new BrowserTracing({
-          // Set tracingOrigins to control what URLs are traced
-          tracingOrigins: [
-            'localhost',
-            /^https:\/\/.*\.iownmyfuture\.ai/,
-            /^\//
-          ],
-          // Capture interactions like clicks
-          routingInstrumentation: Sentry.reactRouterV6Instrumentation(
-            React.useEffect,
-            useLocation,
-            useNavigationType,
-            createRoutesFromChildren,
-            matchRoutes
-          ),
-        }),
-        new Sentry.Replay({
+        Sentry.browserTracingIntegration(),
+        Sentry.replayIntegration({
           // Mask all text and inputs for privacy
           maskAllText: true,
-          maskAllInputs: true,
-          // Only sample 10% of sessions for replay
-          sessionSampleRate: 0.1,
-          // Sample 100% of sessions with errors
-          errorSampleRate: 1.0,
+          maskAllInputs: true
         }),
       ],
       
@@ -156,7 +136,7 @@ export function trackSentryEvent(message: string, level: Sentry.SeverityLevel = 
  * Create a transaction for performance monitoring
  */
 export function startSentryTransaction(name: string, op: string) {
-  return Sentry.startTransaction({ name, op });
+  return Sentry.startSpan({ name, op }, () => {});
 }
 
 /**
