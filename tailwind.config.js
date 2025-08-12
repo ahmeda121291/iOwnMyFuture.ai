@@ -6,6 +6,7 @@ export default {
       colors: {
         // Primary lavender palette
         primary: {
+          DEFAULT: '#C3B1E1', // Default for bg-primary, text-primary, etc.
           50: '#f8f7ff',
           100: '#f0edff', 
           200: '#e4deff',
@@ -20,6 +21,7 @@ export default {
         },
         // Secondary accent colors
         accent: {
+          DEFAULT: '#8A2BE2', // Default for bg-accent, text-accent, etc.
           50: '#fdf4ff',
           100: '#fae8ff',
           200: '#f5d0fe',
@@ -39,10 +41,22 @@ export default {
         'text-secondary': '#6B7280',
         'text-muted': '#9CA3AF',
         // Status colors
-        success: '#10B981',
-        warning: '#F59E0B',
-        error: '#EF4444',
-        info: '#3B82F6'
+        success: {
+          DEFAULT: '#10B981',
+          500: '#10B981'
+        },
+        warning: {
+          DEFAULT: '#F59E0B',
+          500: '#F59E0B'
+        },
+        error: {
+          DEFAULT: '#EF4444',
+          500: '#EF4444'
+        },
+        info: {
+          DEFAULT: '#3B82F6',
+          500: '#3B82F6'
+        }
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
