@@ -1,78 +1,110 @@
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home, Mail } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
+import { AlertTriangle, RefreshCw, Home, MessageSquare } from 'lucide-react';
 import { errorTracker } from '../utils/errorTracking';
 import Button from './Button';
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
+  showDetails?: boolean;
+  componentName?: string;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: ErrorInfo | null;
-  errorCount: number;
+  eventId: string | undefined;
+  showFeedback: boolean;
+  feedbackSent: boolean;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { 
-      hasError: false, 
-      error: null, 
+    this.state = {
+      hasError: false,
+      error: null,
       errorInfo: null,
-      errorCount: 0
+      eventId: undefined,
+      showFeedback: false,
+      feedbackSent: false,
     };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
     // Update state so the next render will show the fallback UI
-    return { 
-      hasError: true, 
-      error 
-    };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error to console in development
-    if (import.meta.env.DEV) {
-      console.error('ErrorBoundary caught an error:', error, errorInfo);
-      console.error('Component Stack:', errorInfo.componentStack);
-    }
-
-    // Log to error tracking service
+    // Log error to error tracking service
+    const eventId = errorTracker.getLastEventId();
+    
     errorTracker.trackError(error, {
-      component: 'ErrorBoundary',
-      componentStack: errorInfo.componentStack,
-      errorBoundary: true,
-      timestamp: new Date().toISOString()
+      component: this.props.componentName || 'ErrorBoundary',
+      action: 'componentDidCatch',
+      metadata: {
+        componentStack: errorInfo.componentStack,
+        props: this.props,
+      },
     });
 
     // Update state with error details
-    this.setState(prevState => ({
+    this.setState({
       errorInfo,
-      errorCount: prevState.errorCount + 1
-    }));
+      eventId,
+    });
   }
 
   handleReset = () => {
-    // Reset error boundary state
     this.setState({
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
+      eventId: undefined,
+      showFeedback: false,
+      feedbackSent: false,
     });
-
-    // Optionally reload the page if errors persist
-    if (this.state.errorCount >= 3) {
-      window.location.reload();
-    }
   };
 
   handleGoHome = () => {
-    // Navigate to home page and reset state
     window.location.href = '/';
+  };
+
+  handleReload = () => {
+    window.location.reload();
+  };
+
+  handleShowFeedback = () => {
+    this.setState({ showFeedback: true });
+  };
+
+  handleSendFeedback = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    
+    const formData = new FormData(event.currentTarget);
+    const comments = formData.get('comments') as string;
+    const email = formData.get('email') as string;
+    
+    if (comments) {
+      errorTracker.captureUserFeedback({
+        comments,
+        email: email || undefined,
+        eventId: this.state.eventId,
+      });
+      
+      this.setState({ 
+        feedbackSent: true,
+        showFeedback: false 
+      });
+      
+      // Reset after showing success message
+      setTimeout(() => {
+        this.handleReset();
+      }, 3000);
+    }
   };
 
   render() {
@@ -84,96 +116,131 @@ class ErrorBoundary extends Component<Props, State> {
 
       // Default error UI
       return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center p-4">
-          <div className="max-w-md w-full">
-            <div className="bg-white rounded-2xl shadow-xl p-8 text-center relative overflow-hidden">
-              {/* Decorative gradient background */}
-              <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-orange-50 opacity-50"></div>
+        <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1] flex items-center justify-center p-4">
+          <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
               
-              <div className="relative z-10">
-                {/* Error Icon */}
-                <div className="mx-auto w-20 h-20 bg-gradient-to-br from-red-100 to-orange-100 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                  <AlertTriangle className="w-10 h-10 text-red-600" />
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                Oops! Something went wrong
+              </h1>
+              
+              <p className="text-gray-600 mb-6">
+                We're sorry for the inconvenience. The error has been logged and we'll look into it.
+              </p>
+
+              {this.state.feedbackSent ? (
+                <div className="mb-6 p-4 bg-green-50 rounded-lg">
+                  <p className="text-green-800">
+                    Thank you for your feedback! We'll use it to improve the app.
+                  </p>
                 </div>
+              ) : (
+                <>
+                  {this.state.showFeedback ? (
+                    <form onSubmit={this.handleSendFeedback} className="mb-6 text-left">
+                      <div className="mb-4">
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                          Email (optional)
+                        </label>
+                        <input
+                          type="email"
+                          id="email"
+                          name="email"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="your@email.com"
+                        />
+                      </div>
+                      
+                      <div className="mb-4">
+                        <label htmlFor="comments" className="block text-sm font-medium text-gray-700 mb-1">
+                          What were you doing when this error occurred?
+                        </label>
+                        <textarea
+                          id="comments"
+                          name="comments"
+                          required
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          placeholder="I was trying to..."
+                        />
+                      </div>
+                      
+                      <div className="flex gap-3">
+                        <Button type="submit" variant="primary">
+                          Send Feedback
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => this.setState({ showFeedback: false })}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  ) : null}
+                </>
+              )}
 
-                {/* Error Message */}
-                <h1 className="text-2xl font-bold text-gray-900 mb-3">
-                  Oops! Something went wrong
-                </h1>
+              {/* Error details for development */}
+              {this.props.showDetails && this.state.error && import.meta.env.DEV && (
+                <details className="mb-6 text-left">
+                  <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
+                    Show error details
+                  </summary>
+                  <div className="mt-2 p-4 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-mono text-red-600 mb-2">
+                      {this.state.error.message}
+                    </p>
+                    {this.state.error.stack && (
+                      <pre className="text-xs text-gray-600 overflow-auto">
+                        {this.state.error.stack}
+                      </pre>
+                    )}
+                  </div>
+                </details>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Button
+                  onClick={this.handleReset}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Try Again
+                </Button>
                 
-                <p className="text-gray-600 mb-6">
-                  We encountered an unexpected error. Don't worry, your data is safe. 
-                  Please try refreshing the page or return to the home page.
-                </p>
-
-                {/* Error Details (Development Only) */}
-                {import.meta.env.DEV && this.state.error && (
-                  <details className="mb-6 text-left">
-                    <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                      Show technical details
-                    </summary>
-                    <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <p className="text-xs font-mono text-red-600 break-all">
-                        {this.state.error.toString()}
-                      </p>
-                      {this.state.error.stack && (
-                        <pre className="mt-2 text-xs text-gray-600 overflow-x-auto">
-                          {this.state.error.stack}
-                        </pre>
-                      )}
-                      {this.state.errorInfo?.componentStack && (
-                        <pre className="mt-2 text-xs text-gray-500 overflow-x-auto">
-                          {this.state.errorInfo.componentStack}
-                        </pre>
-                      )}
-                    </div>
-                  </details>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <Button
-                    onClick={this.handleReset}
-                    className="flex items-center justify-center bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
-                  >
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Try Again
-                  </Button>
-                  
+                <Button
+                  variant="secondary"
+                  onClick={this.handleGoHome}
+                  className="flex items-center justify-center gap-2"
+                >
+                  <Home className="w-4 h-4" />
+                  Go Home
+                </Button>
+                
+                {!this.state.feedbackSent && !this.state.showFeedback && (
                   <Button
                     variant="secondary"
-                    onClick={this.handleGoHome}
-                    className="flex items-center justify-center"
+                    onClick={this.handleShowFeedback}
+                    className="flex items-center justify-center gap-2"
                   >
-                    <Home className="w-4 h-4 mr-2" />
-                    Go Home
+                    <MessageSquare className="w-4 h-4" />
+                    Report Issue
                   </Button>
-                </div>
-
-                {/* Retry Counter Warning */}
-                {this.state.errorCount >= 2 && (
-                  <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <p className="text-sm text-orange-700">
-                      ⚠️ Multiple errors detected. If the problem persists, 
-                      the page will automatically refresh.
-                    </p>
-                  </div>
                 )}
-
-                {/* Support Link */}
-                <div className="mt-6 pt-6 border-t border-gray-200">
-                  <p className="text-xs text-gray-500 mb-2">
-                    If this problem continues, please contact our support team
-                  </p>
-                  <a 
-                    href="mailto:support@iownmyfuture.ai" 
-                    className="inline-flex items-center text-sm text-primary hover:text-primary/80 transition-colors"
-                  >
-                    <Mail className="w-4 h-4 mr-1" />
-                    support@iownmyfuture.ai
-                  </a>
-                </div>
               </div>
+
+              {/* Event ID for support */}
+              {this.state.eventId && (
+                <p className="mt-6 text-xs text-gray-500">
+                  Error ID: {this.state.eventId}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -182,6 +249,159 @@ class ErrorBoundary extends Component<Props, State> {
 
     return this.props.children;
   }
+}
+
+// Create a Sentry-enhanced error boundary
+export const SentryErrorBoundary = Sentry.withErrorBoundary(
+  ({ children }: { children: ReactNode }) => <>{children}</>,
+  {
+    fallback: ({ error, resetError, eventId }) => (
+      <ErrorBoundaryFallback 
+        error={error} 
+        resetError={resetError} 
+        eventId={eventId}
+      />
+    ),
+    showDialog: false, // We'll handle our own dialog
+  }
+);
+
+// Functional fallback component
+function ErrorBoundaryFallback({ 
+  error, 
+  resetError, 
+  eventId 
+}: { 
+  error: Error | null; 
+  resetError: () => void; 
+  eventId: string | null;
+}) {
+  const [feedbackSent, setFeedbackSent] = React.useState(false);
+  const [showFeedback, setShowFeedback] = React.useState(false);
+
+  const handleSendFeedback = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    
+    const formData = new FormData(event.currentTarget);
+    const comments = formData.get('comments') as string;
+    const email = formData.get('email') as string;
+    
+    if (comments) {
+      errorTracker.captureUserFeedback({
+        comments,
+        email: email || undefined,
+        eventId: eventId || undefined,
+      });
+      
+      setFeedbackSent(true);
+      setShowFeedback(false);
+      
+      // Reset after showing success message
+      setTimeout(() => {
+        resetError();
+      }, 3000);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1] flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-600" />
+          </div>
+          
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            Something went wrong
+          </h1>
+          
+          <p className="text-gray-600 mb-6">
+            An unexpected error occurred. Please try refreshing the page.
+          </p>
+
+          {feedbackSent ? (
+            <div className="mb-6 p-4 bg-green-50 rounded-lg">
+              <p className="text-green-800">
+                Thank you for your feedback!
+              </p>
+            </div>
+          ) : (
+            <>
+              {showFeedback ? (
+                <form onSubmit={handleSendFeedback} className="mb-6 text-left">
+                  <div className="mb-4">
+                    <label htmlFor="comments" className="block text-sm font-medium text-gray-700 mb-1">
+                      What happened?
+                    </label>
+                    <textarea
+                      id="comments"
+                      name="comments"
+                      required
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="Please describe what you were doing..."
+                    />
+                  </div>
+                  
+                  <div className="mb-4">
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                      Email (optional)
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <Button type="submit">Send</Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setShowFeedback(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              ) : null}
+            </>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button onClick={resetError}>
+              Try Again
+            </Button>
+            
+            <Button
+              variant="secondary"
+              onClick={() => window.location.href = '/'}
+            >
+              Go Home
+            </Button>
+            
+            {!feedbackSent && !showFeedback && (
+              <Button
+                variant="secondary"
+                onClick={() => setShowFeedback(true)}
+              >
+                Report Issue
+              </Button>
+            )}
+          </div>
+
+          {eventId && (
+            <p className="mt-6 text-xs text-gray-500">
+              Error ID: {eventId}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default ErrorBoundary;

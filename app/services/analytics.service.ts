@@ -1,6 +1,8 @@
 import { supabase } from '../core/api/supabase';
 import { journalService } from './journal.service';
 import { moodboardService } from './moodboard.service';
+import { goalsService } from './goals.service';
+import { trackDataError } from '../shared/utils/errorTracking';
 
 export interface MoodAnalytics {
   topMoods: Array<{
@@ -24,6 +26,10 @@ export interface ProgressMetrics {
   totalEntries: number;
   entriesThisMonth: number;
   goalsCompleted: number;
+  goalsCompletedThisMonth: number;
+  goalsCompletedThisYear: number;
+  activeGoals: number;
+  averageGoalProgress: number;
   visionScore: number;
   monthlyProgress: number;
 }
@@ -67,7 +73,7 @@ class AnalyticsService {
 
       return data as MoodAnalytics;
     } catch (error) {
-      console.error('GetMoodAnalytics error:', error);
+      trackDataError(error, 'AnalyticsService', 'getMoodAnalytics');
       
       // Return default analytics on error
       return {
@@ -91,31 +97,41 @@ class AnalyticsService {
       // Get moodboard stats
       const moodboardStats = await moodboardService.getMoodboardStats(userId);
       
-      // Calculate vision score based on various factors
+      // Get goals stats
+      const goalsStats = await goalsService.getGoalStats(userId);
+      
+      // Calculate vision score based on various factors including goals
       const visionScore = this.calculateVisionScore(
         journalStats.totalEntries,
         journalStats.currentStreak,
-        moodboardStats.totalElements
+        moodboardStats.totalElements,
+        goalsStats.completedGoals,
+        goalsStats.averageProgress
       );
       
-      // Calculate monthly progress percentage
-      const monthlyGoal = 20; // Target 20 entries per month
-      const monthlyProgress = Math.min(
-        (journalStats.entriesThisMonth / monthlyGoal) * 100,
-        100
-      );
+      // Calculate monthly progress percentage (includes both journal and goals)
+      const monthlyJournalGoal = 20; // Target 20 entries per month
+      const monthlyGoalsGoal = 2; // Target 2 goals completed per month
+      
+      const journalProgress = (journalStats.entriesThisMonth / monthlyJournalGoal) * 50;
+      const goalsProgress = (goalsStats.completedThisMonth / monthlyGoalsGoal) * 50;
+      const monthlyProgress = Math.min(journalProgress + goalsProgress, 100);
 
       return {
         journalStreak: journalStats.currentStreak,
         longestStreak: journalStats.longestStreak,
         totalEntries: journalStats.totalEntries,
         entriesThisMonth: journalStats.entriesThisMonth,
-        goalsCompleted: 0, // TODO: Implement goals tracking
+        goalsCompleted: goalsStats.completedGoals,
+        goalsCompletedThisMonth: goalsStats.completedThisMonth,
+        goalsCompletedThisYear: goalsStats.completedThisYear,
+        activeGoals: goalsStats.activeGoals,
+        averageGoalProgress: Math.round(goalsStats.averageProgress),
         visionScore,
         monthlyProgress,
       };
     } catch (error) {
-      console.error('GetProgressMetrics error:', error);
+      trackDataError(error, 'AnalyticsService', 'getProgressMetrics');
       throw error;
     }
   }
@@ -149,7 +165,7 @@ class AnalyticsService {
         achievements,
       };
     } catch (error) {
-      console.error('GetUserInsights error:', error);
+      trackDataError(error, 'AnalyticsService', 'getUserInsights');
       throw error;
     }
   }
@@ -198,7 +214,7 @@ class AnalyticsService {
         progressPercentage,
       };
     } catch (error) {
-      console.error('GetWeeklySummary error:', error);
+      trackDataError(error, 'AnalyticsService', 'getWeeklySummary');
       throw error;
     }
   }
@@ -237,7 +253,7 @@ class AnalyticsService {
 
       return distribution;
     } catch (error) {
-      console.error('GetMoodDistribution error:', error);
+      trackDataError(error, 'AnalyticsService', 'getMoodDistribution');
       throw error;
     }
   }
@@ -299,7 +315,7 @@ class AnalyticsService {
         consistencyScore,
       };
     } catch (error) {
-      console.error('GetProductivityInsights error:', error);
+      trackDataError(error, 'AnalyticsService', 'getProductivityInsights');
       throw error;
     }
   }
@@ -308,13 +324,18 @@ class AnalyticsService {
   private calculateVisionScore(
     totalEntries: number,
     currentStreak: number,
-    totalElements: number
+    totalElements: number,
+    goalsCompleted: number = 0,
+    averageGoalProgress: number = 0
   ): number {
-    const entriesScore = Math.min(totalEntries * 2, 40);
-    const streakScore = Math.min(currentStreak * 5, 30);
-    const elementsScore = Math.min(totalElements * 3, 30);
+    // Weight: entries (30%), streak (20%), moodboard (20%), goals completed (20%), goal progress (10%)
+    const entriesScore = Math.min((totalEntries / 100) * 30, 30);
+    const streakScore = Math.min((currentStreak / 30) * 20, 20);
+    const elementsScore = Math.min((totalElements / 20) * 20, 20);
+    const goalsScore = Math.min((goalsCompleted / 10) * 20, 20);
+    const progressScore = (averageGoalProgress / 100) * 10;
     
-    return Math.min(entriesScore + streakScore + elementsScore, 100);
+    return Math.round(entriesScore + streakScore + elementsScore + goalsScore + progressScore);
   }
 
   private analyzeWritingPatterns(entries: any[]): UserInsights['writingPatterns'] {

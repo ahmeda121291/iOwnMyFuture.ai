@@ -9,7 +9,7 @@ import { type JournalEntry } from '../core/types';
 import { useJournalEntries, useCreateJournalEntry, useUpdateJournalEntry, useDeleteJournalEntry } from '../shared/hooks/queries/useJournalQueries';
 import JournalCalendar from '../features/journal/JournalCalendar';
 import JournalEntryForm from '../features/journal/JournalEntryForm';
-import EnhancedFullScreenEditor from '../features/journal/EnhancedFullScreenEditor';
+import FullScreenEditor from '../features/journal/FullScreenEditor';
 import EntrySummaryCard from '../features/journal/EntrySummaryCard';
 import JournalPrompt from '../features/journal/JournalPrompt';
 import Button from '../shared/components/Button';
@@ -523,7 +523,7 @@ export default function JournalPage() {
       )}
 
       {/* Enhanced Full Screen Editor */}
-      <EnhancedFullScreenEditor
+      <FullScreenEditor
         isOpen={showFullScreenEditor}
         onClose={() => {
           setShowFullScreenEditor(false);

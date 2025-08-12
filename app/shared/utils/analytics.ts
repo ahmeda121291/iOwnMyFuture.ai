@@ -1,4 +1,5 @@
 import { type JournalEntry } from '../core/types';
+import { goalsService, type Goal } from '../../services/goals.service';
 
 export interface ProgressData {
   date: string;
@@ -131,7 +132,8 @@ export function calculateAverageWordsPerEntry(entries: JournalEntry[]): number {
 export function generateProgressData(
   entries: JournalEntry[], 
   moodboardUpdates: Array<{ id: string; updated_at: string }>, 
-  timeframe: 'week' | 'month' | 'quarter'
+  timeframe: 'week' | 'month' | 'quarter',
+  goals?: Goal[]
 ): ProgressData[] {
   const daysBack = timeframe === 'week' ? 7 : timeframe === 'month' ? 30 : 90;
   const days = Array.from({ length: daysBack }, (_, i) => {
@@ -146,8 +148,12 @@ export function generateProgressData(
       update.updated_at.split('T')[0] === date
     ).length;
     
-    // Mock goal progress - in a real app, this would come from a goals table
-    const goalProgress = Math.floor(Math.random() * 3);
+    // Count goals completed on this date
+    const goalProgress = goals ? goals.filter(goal => 
+      goal.status === 'completed' && 
+      goal.completed_at && 
+      goal.completed_at.split('T')[0] === date
+    ).length : 0;
 
     return {
       date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),

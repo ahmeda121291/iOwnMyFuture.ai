@@ -1,3 +1,5 @@
+import { stripePricesService } from '../../services/stripePrices.service';
+
 export interface Product {
   id: string;
   productId: string; // Stripe Product ID
@@ -8,29 +10,45 @@ export interface Product {
   mode: 'subscription' | 'payment';
 }
 
-// NOTE: These price IDs need to be retrieved from Stripe API
-// Using product IDs: prod_SlmIZrU6E29IYr (monthly), prod_SlmIrtY1LuVNsA (yearly)
-export const products: Product[] = [
-  {
-    id: 'pro_monthly',
-    productId: 'prod_SlmIZrU6E29IYr',
-    priceId: 'price_1QS0uQRqrkWBY7xJQnRLMhvL', // TODO: Update with actual price ID from Stripe
-    name: 'MyFutureSelf Pro Monthly',
-    description: 'Essential AI-powered vision board and journaling platform to help you achieve your goals.',
-    price: 15.00, // $15/month as per requirements
-    mode: 'subscription'
-  },
-  {
-    id: 'pro_annual',
-    productId: 'prod_SlmIrtY1LuVNsA',
-    priceId: 'price_1QS0vnRqrkWBY7xJP77VQkUP', // TODO: Update with actual price ID from Stripe
-    name: 'MyFutureSelf Pro Annual',
-    description: 'Premium AI-powered vision board and journaling platform to transform your dreams into reality.',
-    price: 180.00, // $180/year (saves $36)
-    mode: 'subscription'
-  }
-];
+// Product IDs from Stripe Dashboard (these are stable and don't change)
+export const PRODUCT_IDS = {
+  MONTHLY: 'prod_SlmIZrU6E29IYr',
+  YEARLY: 'prod_SlmIrtY1LuVNsA'
+} as const;
 
-export const getProductByPriceId = (priceId: string): Product | undefined => {
+// This function dynamically creates the products array from fetched prices
+export const getProducts = async (): Promise<Product[]> => {
+  try {
+    const prices = await stripePricesService.fetchPrices();
+    
+    return [
+      {
+        id: 'pro_monthly',
+        productId: prices.monthly.productId,
+        priceId: prices.monthly.priceId,
+        name: 'MyFutureSelf Pro Monthly',
+        description: 'Essential AI-powered vision board and journaling platform to help you achieve your goals.',
+        price: prices.monthly.amount / 100, // Convert from cents to dollars
+        mode: 'subscription'
+      },
+      {
+        id: 'pro_annual',
+        productId: prices.yearly.productId,
+        priceId: prices.yearly.priceId,
+        name: 'MyFutureSelf Pro Annual',
+        description: 'Premium AI-powered vision board and journaling platform to transform your dreams into reality.',
+        price: prices.yearly.amount / 100, // Convert from cents to dollars
+        mode: 'subscription'
+      }
+    ];
+  } catch (error) {
+    console.error('Failed to fetch products:', error);
+    // Return empty array if fetch fails - let the UI handle the error
+    return [];
+  }
+};
+
+export const getProductByPriceId = async (priceId: string): Promise<Product | undefined> => {
+  const products = await getProducts();
   return products.find(product => product.priceId === priceId);
 };

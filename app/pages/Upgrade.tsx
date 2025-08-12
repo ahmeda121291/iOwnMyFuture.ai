@@ -19,12 +19,14 @@ import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import toast from 'react-hot-toast';
 import { errorTracker } from '../shared/utils/errorTracking';
+import { useStripePrices } from '../hooks/useStripePrices';
 
 export default function UpgradePage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const { prices, loading: pricesLoading, error: pricesError, formatPrice, getSavings } = useStripePrices();
 
   const checkAccess = useCallback(async () => {
     try {
@@ -142,10 +144,24 @@ export default function UpgradePage() {
     }
   };
 
-  if (checkingSubscription) {
+  if (checkingSubscription || pricesLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1] flex items-center justify-center">
         <Loader size="large" />
+      </div>
+    );
+  }
+
+  // Show error if prices failed to load
+  if (pricesError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1]">
+        <div className="container mx-auto px-4 py-12">
+          <div className="text-center">
+            <p className="text-xl text-red-600 mb-4">Unable to load pricing information</p>
+            <p className="text-gray-700">Please try refreshing the page or contact support.</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -162,9 +178,12 @@ export default function UpgradePage() {
     { icon: <Zap className="w-5 h-5" />, text: "24/7 Customer Support" }
   ];
 
-  // Price IDs from Stripe - TODO: Fetch dynamically from stripe-prices Edge Function
-  const MONTHLY_PRICE_ID = 'price_1QS0uQRqrkWBY7xJQnRLMhvL';
-  const YEARLY_PRICE_ID = 'price_1QS0vnRqrkWBY7xJP77VQkUP';
+  // Get price IDs and amounts from fetched prices
+  const MONTHLY_PRICE_ID = prices?.monthly.priceId || '';
+  const YEARLY_PRICE_ID = prices?.yearly.priceId || '';
+  const monthlyAmount = prices?.monthly.amount || 1500; // Fallback to $15
+  const yearlyAmount = prices?.yearly.amount || 18000; // Fallback to $180
+  const savings = getSavings();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1]">
@@ -200,7 +219,7 @@ export default function UpgradePage() {
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Monthly Pro</h2>
               <div className="flex items-baseline">
-                <span className="text-5xl font-bold text-gray-900">$15</span>
+                <span className="text-5xl font-bold text-gray-900">{formatPrice(monthlyAmount)}</span>
                 <span className="text-gray-600 ml-2">/month</span>
               </div>
               <p className="text-gray-600 mt-2">Perfect for trying out the platform</p>
@@ -220,9 +239,13 @@ export default function UpgradePage() {
             <Button
               onClick={() => {
                 console.log('[Upgrade] Monthly plan button clicked');
-                handleUpgrade(MONTHLY_PRICE_ID);
+                if (MONTHLY_PRICE_ID) {
+                  handleUpgrade(MONTHLY_PRICE_ID);
+                } else {
+                  toast.error('Pricing information not available. Please refresh the page.');
+                }
               }}
-              disabled={loading}
+              disabled={loading || !MONTHLY_PRICE_ID}
               className="w-full bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white py-3 rounded-lg font-semibold flex items-center justify-center"
             >
               {loading ? (
@@ -248,22 +271,26 @@ export default function UpgradePage() {
             className="bg-gradient-to-br from-primary-50 to-accent-50 rounded-2xl shadow-xl p-8 relative border-2 border-primary-500"
           >
             {/* Best Value Badge */}
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <span className="bg-gradient-to-r from-primary-500 to-accent-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
-                BEST VALUE - Save $36
-              </span>
-            </div>
+            {savings > 0 && (
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <span className="bg-gradient-to-r from-primary-500 to-accent-500 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                  BEST VALUE - Save {formatPrice(savings)}
+                </span>
+              </div>
+            )}
 
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Annual Pro</h2>
               <div className="flex items-baseline">
-                <span className="text-5xl font-bold text-gray-900">$180</span>
+                <span className="text-5xl font-bold text-gray-900">{formatPrice(yearlyAmount)}</span>
                 <span className="text-gray-600 ml-2">/year</span>
               </div>
-              <p className="text-gray-600 mt-2">
-                <span className="line-through text-gray-400">$216</span>
-                <span className="text-green-600 font-semibold ml-2">Save $36/year</span>
-              </p>
+              {savings > 0 && (
+                <p className="text-gray-600 mt-2">
+                  <span className="line-through text-gray-400">{formatPrice(monthlyAmount * 12)}</span>
+                  <span className="text-green-600 font-semibold ml-2">Save {formatPrice(savings)}/year</span>
+                </p>
+              )}
             </div>
 
             <ul className="space-y-4 mb-8">
@@ -280,9 +307,13 @@ export default function UpgradePage() {
             <Button
               onClick={() => {
                 console.log('[Upgrade] Annual plan button clicked');
-                handleUpgrade(YEARLY_PRICE_ID);
+                if (YEARLY_PRICE_ID) {
+                  handleUpgrade(YEARLY_PRICE_ID);
+                } else {
+                  toast.error('Pricing information not available. Please refresh the page.');
+                }
               }}
-              disabled={loading}
+              disabled={loading || !YEARLY_PRICE_ID}
               className="w-full bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 text-white py-3 rounded-lg font-semibold flex items-center justify-center shadow-lg"
             >
               {loading ? (

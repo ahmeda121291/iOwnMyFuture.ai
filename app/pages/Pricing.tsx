@@ -4,11 +4,14 @@ import { createCheckoutSession } from '../core/api/stripeClient';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '../core/api/supabase';
 import toast from 'react-hot-toast';
+import { useStripePrices } from '../hooks/useStripePrices';
+import Loader from '../shared/components/Loader';
 
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { prices, loading: pricesLoading, error: pricesError, formatPrice, getSavings } = useStripePrices();
 
   // Update page meta tags
   React.useEffect(() => {
@@ -84,9 +87,35 @@ export default function PricingPage() {
     '24/7 Customer Support'
   ];
 
-  // Same price IDs as in Upgrade.tsx - TODO: Fetch from Stripe API
-  const monthlyPriceId = 'price_1QS0uQRqrkWBY7xJQnRLMhvL'; // $15/month
-  const yearlyPriceId = 'price_1QS0vnRqrkWBY7xJP77VQkUP'; // $180/year
+  // Get price IDs from fetched prices
+  const monthlyPriceId = prices?.monthly.priceId;
+  const yearlyPriceId = prices?.yearly.priceId;
+  const monthlyAmount = prices?.monthly.amount || 1500; // Fallback to $15
+  const yearlyAmount = prices?.yearly.amount || 18000; // Fallback to $180
+  const savings = getSavings();
+
+  // Show loader while fetching prices
+  if (pricesLoading) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1] pt-20 flex items-center justify-center">
+        <Loader size="large" />
+      </main>
+    );
+  }
+
+  // Show error if prices failed to load
+  if (pricesError) {
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1] pt-20">
+        <div className="container mx-auto px-6 py-16">
+          <div className="text-center">
+            <p className="text-xl text-red-600 mb-4">Unable to load pricing information</p>
+            <p className="text-gray-700">Please try refreshing the page or contact support.</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1] pt-20">
@@ -130,9 +159,11 @@ export default function PricingPage() {
               }`}
             >
               Yearly
-              <span className="ml-2 px-2 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs rounded-full">
-                Save $36
-              </span>
+              {savings > 0 && (
+                <span className="ml-2 px-2 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs rounded-full">
+                  Save {formatPrice(savings)}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -154,16 +185,16 @@ export default function PricingPage() {
               <h3 className="text-3xl font-bold text-gray-900 mb-2">Pro</h3>
               <div className="mb-4">
                 <span className="text-6xl font-bold text-gray-900">
-                  ${billingCycle === 'monthly' ? '15' : '180'}
+                  {formatPrice(billingCycle === 'monthly' ? monthlyAmount : yearlyAmount)}
                 </span>
                 <span className="text-xl text-gray-600 ml-1">
                   /{billingCycle === 'monthly' ? 'month' : 'year'}
                 </span>
               </div>
-              {billingCycle === 'yearly' && (
+              {billingCycle === 'yearly' && savings > 0 && (
                 <div className="bg-gradient-to-r from-primary-100 to-accent-100 rounded-full px-4 py-2 inline-block mb-4">
                   <span className="text-sm font-medium text-primary-800">
-                    Billed annually ($180) • Save $36/year
+                    Billed annually ({formatPrice(yearlyAmount)}) • Save {formatPrice(savings)}/year
                   </span>
                 </div>
               )}
@@ -182,8 +213,15 @@ export default function PricingPage() {
 
             {/* CTA Button */}
             <button
-              onClick={() => handleChoosePlan(billingCycle === 'yearly' ? yearlyPriceId : monthlyPriceId)}
-              disabled={loading}
+              onClick={() => {
+                const priceId = billingCycle === 'yearly' ? yearlyPriceId : monthlyPriceId;
+                if (priceId) {
+                  handleChoosePlan(priceId);
+                } else {
+                  toast.error('Pricing information not available. Please refresh the page.');
+                }
+              }}
+              disabled={loading || !monthlyPriceId || !yearlyPriceId}
               className="w-full bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white py-4 rounded-2xl font-semibold text-lg transition-all duration-300 flex items-center justify-center group shadow-2xl hover:shadow-accent-500/25 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

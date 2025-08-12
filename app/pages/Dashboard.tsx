@@ -10,6 +10,7 @@ import Loader from '../shared/components/Loader';
 import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
 import MoodAnalyticsPanelLazy from '../features/insights/MoodAnalyticsPanelLazy';
 import FirstTimeChecklist from '../features/Onboarding/FirstTimeChecklist';
+import GoalsDashboard from '../features/goals/GoalsDashboard';
 
 // Types
 
@@ -172,6 +173,11 @@ export default function DashboardPage() {
 
         {/* First Time Checklist */}
         <FirstTimeChecklist />
+
+        {/* Goals Dashboard */}
+        <div className="mb-8">
+          <GoalsDashboard />
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}

@@ -1,6 +1,7 @@
 import { loadStripe } from '@stripe/stripe-js';
 import type { Stripe } from '@stripe/stripe-js';
 import { supabase } from './supabase';
+import { secureFetch, createSecureJSON } from '../../shared/security/csrf';
 
 let stripePromise: Promise<Stripe | null> | null = null;
 
@@ -13,12 +14,12 @@ const getStripePublishableKey = async (): Promise<string> => {
 
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-config`;
   
-  const response = await fetch(apiUrl, {
+  // Use secureFetch which automatically includes CSRF token
+  const response = await secureFetch(apiUrl, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${session.access_token}`,
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      'content-type': 'application/json',
+      'Content-Type': 'application/json',
     },
   });
 
@@ -47,7 +48,6 @@ interface CreateCheckoutSessionOptions {
   mode?: 'subscription' | 'payment';
   successUrl?: string;
   cancelUrl?: string;
-  csrfToken?: string;
 }
 
 export const createCheckoutSession = async (options: CreateCheckoutSessionOptions | string) => {
@@ -80,61 +80,23 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
 
   console.log('[stripeClient] Auth session found, user:', session.user?.email);
 
-  // Get CSRF token if not provided
-  let csrfToken = params.csrfToken || '';
-  
-  if (!csrfToken) {
-    try {
-      const csrfTokenUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/csrf-token`;
-      console.log('[stripeClient] Fetching CSRF token from:', csrfTokenUrl);
-
-      const csrfResponse = await fetch(csrfTokenUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!csrfResponse.ok) {
-        const errorText = await csrfResponse.text();
-        console.error('[stripeClient] CSRF token fetch failed:', errorText);
-        // Don't fail if CSRF fails in dev
-        if (import.meta.env.MODE === 'production') {
-          throw new Error(`Failed to get CSRF token: ${csrfResponse.status}`);
-        } else {
-          csrfToken = 'dev-mode-no-csrf';
-        }
-      } else {
-        const csrfData = await csrfResponse.json();
-        csrfToken = csrfData.csrf_token || 'dev-mode-no-csrf';
-        console.log('[stripeClient] CSRF token obtained');
-      }
-    } catch (error) {
-      console.error('[stripeClient] CSRF token error:', error);
-      if (import.meta.env.MODE === 'production') {
-        throw error;
-      } else {
-        csrfToken = 'dev-mode-no-csrf';
-      }
-    }
-  }
-
-  // Create the checkout session
+  // Create the checkout session - CSRF token is handled by secureFetch
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`;
+  console.log('[stripeClient] Creating checkout session at:', apiUrl);
   
-  const requestBody = {
+  // Prepare request body with CSRF token included
+  const requestBody = await createSecureJSON({
     price_id: params.priceId,
     mode: params.mode || 'subscription',
     success_url: params.successUrl || `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: params.cancelUrl || `${window.location.origin}/pricing`,
-    csrf_token: csrfToken,
-  };
+  });
 
   console.log('[stripeClient] Sending checkout request to:', apiUrl);
   console.log('[stripeClient] Request body:', { ...requestBody, csrf_token: 'REDACTED' });
   
-  const response = await fetch(apiUrl, {
+  // Use secureFetch which automatically adds CSRF token header and includes cookies
+  const response = await secureFetch(apiUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${session.access_token}`,
@@ -171,3 +133,51 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
   return result;
 };
 
+interface CreateBillingPortalSessionOptions {
+  returnUrl?: string;
+}
+
+export const createBillingPortalSession = async (options?: CreateBillingPortalSessionOptions) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session?.access_token) {
+    throw new Error('User not authenticated');
+  }
+
+  const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-portal`;
+  
+  // Prepare request body with CSRF token
+  const requestBody = await createSecureJSON({
+    return_url: options?.returnUrl || window.location.href,
+  });
+  
+  // Use secureFetch for CSRF protection
+  const response = await secureFetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = { error: 'Failed to create billing portal session' };
+    }
+    throw new Error(errorData.error || 'Failed to create billing portal session');
+  }
+
+  const { url } = await response.json();
+  
+  if (url) {
+    window.location.href = url;
+  } else {
+    throw new Error('No billing portal URL received');
+  }
+  
+  return { url };
+};

@@ -8,12 +8,15 @@ import {
   Brain, 
   RefreshCw,
   Heart,
-  Zap
+  Zap,
+  Download,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
 import { generateInsightReport } from '../core/api/openai';
 import { type JournalEntry } from '../core/types';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
+import { goalsService, type Goal } from '../services/goals.service';
 import ProgressChartLazy from '../features/insights/ProgressChartLazy';
 import InsightCard from '../features/insights/InsightCard';
 import MoodTrendChartLazy from '../features/insights/MoodTrendChartLazy';
@@ -27,6 +30,8 @@ import {
   generateInsightMetrics,
   generateRecommendations
 } from '../shared/utils/analytics';
+import { exportToPDF, exportToCSV } from '../shared/utils/export';
+import toast from 'react-hot-toast';
 
 interface MoodboardUpdate {
   id: string;
@@ -41,6 +46,7 @@ export default function InsightsPage() {
   const [generatingReport, setGeneratingReport] = useState(false);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [moodboards, setMoodboards] = useState<MoodboardUpdate[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'quarter'>('month');
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -102,6 +108,15 @@ export default function InsightsPage() {
         setMoodboards(moodboardData || []);
       }
 
+      // Load goals data
+      try {
+        const goalsData = await goalsService.getGoals(user.id, { includeCompleted: true });
+        setGoals(goalsData);
+      } catch (goalsError) {
+        console.error('Failed to load goals:', goalsError);
+        setGoals([]);
+      }
+
       // Generate AI insights if we have entries
       if (entries && entries.length > 0) {
         await generateAIInsights(entries);
@@ -121,16 +136,44 @@ export default function InsightsPage() {
   }, [user?.id, loadUserData]);
 
   // Use analytics utilities for data processing
-  const progressData = generateProgressData(journalEntries, moodboards, timeframe);
+  const progressData = generateProgressData(journalEntries, moodboards, timeframe, goals);
   const moodData = generateMoodData(journalEntries, timeframe);
   const metrics = generateInsightMetrics(journalEntries, moodboards);
   const recommendations = generateRecommendations(journalEntries, metrics);
 
-  // Export functionality to be implemented
-  const _exportReport = () => {
-    // TODO: Implement export functionality for PDF and CSV
-    // For now, showing a toast would be better than alert
-    // console.info('Export feature coming soon');
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  
+  const exportReport = async (format: 'pdf' | 'csv') => {
+    try {
+      const exportData = {
+        insights: {
+          aiReport,
+          metrics,
+          recommendations
+        },
+        journalEntries,
+        goals,
+        moodData,
+        progressData,
+        timeframe,
+        generatedAt: new Date().toLocaleString()
+      };
+      
+      const filename = `myfutureself-insights-${timeframe}-${new Date().toISOString().split('T')[0]}`;
+      
+      if (format === 'pdf') {
+        await exportToPDF(exportData, `${filename}.pdf`);
+        toast.success('Opening print dialog for PDF export...');
+      } else {
+        exportToCSV(exportData, `${filename}.csv`);
+        toast.success('CSV report downloaded successfully!');
+      }
+      
+      setShowExportMenu(false);
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export report. Please try again.');
+    }
   };
 
   if (proLoading || dataLoading || !user) {
@@ -184,12 +227,36 @@ export default function InsightsPage() {
               ))}
             </div>
             
-            {/* TODO: Implement export functionality
-            <Button variant="secondary" onClick={exportReport}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-            */}
+            {/* Export functionality */}
+            <div className="relative">
+              <Button 
+                variant="secondary" 
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </Button>
+              
+              {showExportMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                  <button
+                    onClick={() => exportReport('pdf')}
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors"
+                  >
+                    <FileText className="w-4 h-4 text-gray-600" />
+                    <span className="text-gray-700">Export as PDF</span>
+                  </button>
+                  <button
+                    onClick={() => exportReport('csv')}
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors border-t border-gray-100"
+                  >
+                    <Download className="w-4 h-4 text-gray-600" />
+                    <span className="text-gray-700">Export as CSV</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

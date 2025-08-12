@@ -19,6 +19,21 @@ export interface CSRFMiddlewareOptions {
   corsHeaders?: Record<string, string>;
 }
 
+// Cookie configuration
+const COOKIE_NAME = 'csrf_token';
+
+// Extract CSRF token from cookies
+const extractCSRFFromCookie = (cookieHeader: string | null): string | null => {
+  if (!cookieHeader) return null;
+  
+  const cookies = cookieHeader.split(';').map(c => c.trim());
+  const csrfCookie = cookies.find(c => c.startsWith(`${COOKIE_NAME}=`));
+  
+  if (!csrfCookie) return null;
+  
+  return csrfCookie.split('=')[1];
+};
+
 // Hash token for comparison
 const hashToken = async (token: string): Promise<string> => {
   const encoder = new TextEncoder();
@@ -28,44 +43,90 @@ const hashToken = async (token: string): Promise<string> => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-// Validate CSRF token against stored hash
+// Validate double-submit tokens
+const validateDoubleSubmitTokens = (cookieToken: string, headerToken: string): boolean => {
+  // Extract base token from header token (format: baseToken.salt)
+  const [baseToken] = headerToken.split('.');
+  
+  // Compare base tokens
+  return baseToken === cookieToken;
+};
+
+// Validate CSRF token with double-submit cookie pattern
 export const validateCSRFToken = async (
-  token: string, 
+  request: Request,
   userId: string
 ): Promise<CSRFValidationResult> => {
   try {
-    if (!token || typeof token !== 'string') {
-      return { valid: false, error: 'CSRF token missing or invalid format' };
+    // Extract cookie token
+    const cookieToken = extractCSRFFromCookie(request.headers.get('cookie'));
+    
+    if (!cookieToken) {
+      return { valid: false, error: 'CSRF cookie missing' };
     }
 
-    if (token.length !== 64) { // 32 bytes * 2 hex chars
+    // Extract header token from X-CSRF-Token header
+    let headerToken: string | null = request.headers.get('x-csrf-token');
+    
+    // If not in header, try to extract from body
+    if (!headerToken) {
+      const contentType = request.headers.get('content-type');
+      if (contentType?.includes('application/json')) {
+        try {
+          const body = await request.clone().json();
+          headerToken = body.csrf_token;
+        } catch {
+          // Ignore JSON parsing errors
+        }
+      } else if (contentType?.includes('multipart/form-data')) {
+        try {
+          const formData = await request.clone().formData();
+          headerToken = formData.get('csrf_token') as string;
+        } catch {
+          // Ignore form parsing errors
+        }
+      }
+    }
+
+    if (!headerToken) {
+      return { valid: false, error: 'CSRF token missing from header or body' };
+    }
+
+    // Validate token format
+    if (!headerToken.includes('.') || headerToken.length < 65) { // 64 chars for token + dot + salt
       return { valid: false, error: 'Invalid CSRF token format' };
     }
 
-    // Get stored token for user
-    const { data: storedTokens, error: fetchError } = await supabase
+    // Validate double-submit tokens match
+    if (!validateDoubleSubmitTokens(cookieToken, headerToken)) {
+      return { valid: false, error: 'CSRF token mismatch' };
+    }
+
+    // Verify token exists in database and hasn't expired
+    const tokenHash = await hashToken(cookieToken);
+    const { data: storedToken, error: fetchError } = await supabase
       .from('csrf_tokens')
-      .select('token_hash, expires_at')
+      .select('id, expires_at, ip_address')
       .eq('user_id', userId)
+      .eq('token_hash', tokenHash)
       .eq('used', false)
       .gte('expires_at', new Date().toISOString())
-      .limit(1);
+      .single();
 
-    if (fetchError) {
-      console.error('CSRF token fetch error:', fetchError);
-      return { valid: false, error: 'CSRF validation failed' };
+    if (fetchError || !storedToken) {
+      console.error('CSRF token database validation failed:', fetchError);
+      return { valid: false, error: 'Invalid or expired CSRF token' };
     }
 
-    if (!storedTokens || storedTokens.length === 0) {
-      return { valid: false, error: 'No valid CSRF token found' };
-    }
-
-    // Hash the provided token and compare
-    const tokenHash = await hashToken(token);
-    const isValid = tokenHash === storedTokens[0].token_hash;
-
-    if (!isValid) {
-      return { valid: false, error: 'Invalid CSRF token' };
+    // Optional: Verify IP address hasn't changed (can be strict in production)
+    const requestIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
+    if (storedToken.ip_address && requestIp && storedToken.ip_address !== requestIp) {
+      console.warn('CSRF token used from different IP:', { 
+        original: storedToken.ip_address, 
+        current: requestIp 
+      });
+      // You can return false here for stricter security
+      // return { valid: false, error: 'CSRF token IP mismatch' };
     }
 
     return { valid: true };
@@ -84,7 +145,15 @@ export const authenticateAndValidateCSRF = async (
   user?: AuthenticatedUser;
   response?: Response;
 }> => {
-  const { requireCSRF = true, corsHeaders = {} } = options;
+  const { 
+    requireCSRF = true, 
+    corsHeaders = {
+      'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') || 'http://localhost:5173',
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Credentials': 'true',
+    }
+  } = options;
 
   try {
     // Extract auth token
@@ -123,33 +192,13 @@ export const authenticateAndValidateCSRF = async (
       };
     }
 
-    // Validate CSRF token if required
-    if (requireCSRF) {
-      let csrfToken: string | null = null;
-
-      // Extract CSRF token from header or body
-      csrfToken = request.headers.get('x-csrf-token');
+    // Validate CSRF token if required (skip for safe methods)
+    const method = request.method.toUpperCase();
+    const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+    
+    if (requireCSRF && !safeMethods.includes(method)) {
+      const csrfValidation = await validateCSRFToken(request, user.id);
       
-      if (!csrfToken) {
-        try {
-          const body = await request.clone().json();
-          csrfToken = body.csrf_token;
-        } catch {
-          // Ignore JSON parsing errors
-        }
-      }
-
-      if (!csrfToken) {
-        return {
-          success: false,
-          response: new Response(JSON.stringify({ error: 'CSRF token required' }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }),
-        };
-      }
-
-      const csrfValidation = await validateCSRFToken(csrfToken, user.id);
       if (!csrfValidation.valid) {
         return {
           success: false,
@@ -180,7 +229,7 @@ export const authenticateAndValidateCSRF = async (
   }
 };
 
-// Rate limiting check (reused from previous implementation)
+// Rate limiting check
 const checkRateLimit = async (userId: string): Promise<boolean> => {
   try {
     const { data: rateLimitData } = await supabase
@@ -193,6 +242,7 @@ const checkRateLimit = async (userId: string): Promise<boolean> => {
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
     if (!rateLimitData) {
+      // Create new rate limit entry
       await supabase.from('user_rate_limits').insert({
         user_id: userId,
         request_count: 1,
@@ -203,6 +253,7 @@ const checkRateLimit = async (userId: string): Promise<boolean> => {
 
     const lastReset = new Date(rateLimitData.last_reset);
     
+    // Reset counter if more than an hour has passed
     if (lastReset < oneHourAgo) {
       await supabase.from('user_rate_limits')
         .update({ request_count: 1, last_reset: now.toISOString() })
@@ -210,10 +261,12 @@ const checkRateLimit = async (userId: string): Promise<boolean> => {
       return true;
     }
 
+    // Check rate limit (50 requests per hour)
     if (rateLimitData.request_count >= 50) {
       return false;
     }
 
+    // Increment counter
     await supabase.from('user_rate_limits')
       .update({ request_count: rateLimitData.request_count + 1 })
       .eq('user_id', userId);
@@ -221,11 +274,17 @@ const checkRateLimit = async (userId: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error('Rate limit check error:', error);
+    // Allow request on error to avoid blocking legitimate users
     return true;
   }
 };
 
 // Helper function to handle CORS preflight
-export const handleCORS = (corsHeaders: Record<string, string>) => {
+export const handleCORS = (corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') || 'http://localhost:5173',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Credentials': 'true',
+}) => {
   return new Response(null, { headers: corsHeaders });
 };

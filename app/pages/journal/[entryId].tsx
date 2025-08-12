@@ -7,7 +7,9 @@ import {
   Calendar, 
   Clock, 
   Brain,
-  Download 
+  Download,
+  Share2,
+  FileText
 } from 'lucide-react';
 import { getCurrentUser, supabase } from '../../core/api/supabase';
 import { summarizeJournalEntry } from '../../core/api/openai';
@@ -18,6 +20,7 @@ import Modal from '../../shared/components/Modal';
 import Loader from '../../shared/components/Loader';
 import toast from 'react-hot-toast';
 import { errorTracker } from '../../shared/utils/errorTracking';
+import { shareJournalEntry, downloadAsTextFile, isWebShareSupported } from '../../shared/utils/share';
 
 export default function JournalEntryPage() {
   const { entryId } = useParams();
@@ -25,6 +28,7 @@ export default function JournalEntryPage() {
   const [entry, setEntry] = useState<JournalEntry | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   const [regeneratingSummary, setRegeneratingSummary] = useState(false);
 
   useEffect(() => {
@@ -92,7 +96,7 @@ export default function JournalEntryPage() {
         if (!summaryError) {
           setEntry((prev) => prev ? ({ ...prev, ai_summary: aiSummary }) : prev);
         }
-      } catch (aiError) {
+      } catch (_aiError) {
         // AI summarization is optional, silently fail
       }
     } catch (error) {
@@ -121,6 +125,71 @@ export default function JournalEntryPage() {
       errorTracker.trackError(error, { component: 'JournalEntry', action: 'deleteEntry' });
       toast.error('Failed to delete entry. Please try again.');
     }
+  };
+
+  const handleShare = async () => {
+    if (!entry) {
+      return;
+    }
+    
+    try {
+      await shareJournalEntry(entry);
+      setShowShareMenu(false);
+    } catch (error) {
+      console.error('Share failed:', error);
+      toast.error('Failed to share entry');
+    }
+  };
+
+  const handleExport = (format: 'print' | 'text') => {
+    if (!entry) {
+      return;
+    }
+    
+    if (format === 'print') {
+      window.print();
+    } else {
+      const content = formatEntryForExport(entry);
+      const filename = `journal-entry-${entry.entry_date}.txt`;
+      downloadAsTextFile(content, filename);
+    }
+    setShowShareMenu(false);
+  };
+
+  const formatEntryForExport = (entry: JournalEntry): string => {
+    const sections = [];
+    const formattedDate = new Date(entry.entry_date).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    sections.push(`Journal Entry - ${formattedDate}`);
+    sections.push('='.repeat(50));
+    sections.push('');
+    
+    if (entry.ai_summary) {
+      sections.push('Summary:');
+      sections.push(entry.ai_summary);
+      sections.push('');
+    }
+    
+    if (entry.mood) {
+      sections.push(`Mood: ${entry.mood}`);
+      sections.push('');
+    }
+    
+    if (entry.tags && entry.tags.length > 0) {
+      sections.push(`Tags: ${entry.tags.join(', ')}`);
+      sections.push('');
+    }
+    
+    sections.push('Entry:');
+    sections.push('-'.repeat(50));
+    sections.push(entry.content);
+    
+    return sections.join('\n');
   };
 
   const regenerateAISummary = async () => {
@@ -206,22 +275,60 @@ export default function JournalEntryPage() {
           </Button>
 
           <div className="flex space-x-3">
-            <Button
-              variant="secondary"
-              onClick={() => window.print()}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-            {/* TODO: Implement share functionality
-            <Button
-              variant="secondary"
-              onClick={handleShare}
-            >
-              <Share className="w-4 h-4 mr-2" />
-              Share
-            </Button>
-            */}
+            {/* Share & Export Menu */}
+            <div className="relative">
+              <Button
+                variant="secondary"
+                onClick={() => setShowShareMenu(!showShareMenu)}
+              >
+                <Share2 className="w-4 h-4 mr-2" />
+                Share
+              </Button>
+              
+              {showShareMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                  <div className="p-2">
+                    <button
+                      onClick={handleShare}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 rounded-md flex items-center gap-3 transition-colors"
+                    >
+                      <Share2 className="w-4 h-4 text-gray-600" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-700">Share Entry</div>
+                        <div className="text-xs text-gray-500">
+                          {isWebShareSupported() ? 'Share via apps' : 'Copy to clipboard'}
+                        </div>
+                      </div>
+                    </button>
+                    
+                    <div className="border-t border-gray-100 my-2"></div>
+                    
+                    <button
+                      onClick={() => handleExport('print')}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 rounded-md flex items-center gap-3 transition-colors"
+                    >
+                      <FileText className="w-4 h-4 text-gray-600" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-700">Export as PDF</div>
+                        <div className="text-xs text-gray-500">Open print dialog</div>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => handleExport('text')}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-50 rounded-md flex items-center gap-3 transition-colors"
+                    >
+                      <Download className="w-4 h-4 text-gray-600" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-700">Download Text</div>
+                        <div className="text-xs text-gray-500">Save as .txt file</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <Button
               variant="secondary"
               onClick={() => setEditing(true)}

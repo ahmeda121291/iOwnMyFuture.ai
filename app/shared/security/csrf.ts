@@ -1,81 +1,30 @@
 import { supabase } from '../../core/api/supabase';
+import { errorTracker } from '../utils/errorTracking';
 
-// CSRF token configuration
-const CSRF_TOKEN_LENGTH = 32;
-const CSRF_TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+/**
+ * Server-side CSRF Protection with httpOnly cookies
+ * 
+ * This implementation uses a double-submit cookie pattern:
+ * 1. Server sets an httpOnly cookie with the base token
+ * 2. Server returns a header token (base token + salt)
+ * 3. Client includes the header token in X-CSRF-Token header
+ * 4. Server validates that cookie and header tokens match
+ */
 
-// Generate a cryptographically secure random token
-const generateSecureToken = (): string => {
-  const array = new Uint8Array(CSRF_TOKEN_LENGTH);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-};
-
-// CSRF token storage interface
-interface CSRFTokenData {
+interface CSRFToken {
   token: string;
-  timestamp: number;
-  userId: string;
+  expiresAt: string;
 }
 
-// In-memory store for CSRF tokens (in production, use Redis or similar)
-class CSRFTokenStore {
-  private tokens = new Map<string, CSRFTokenData>();
-
-  set(userId: string, token: string): void {
-    this.tokens.set(userId, {
-      token,
-      timestamp: Date.now(),
-      userId,
-    });
-  }
-
-  get(userId: string): CSRFTokenData | null {
-    const tokenData = this.tokens.get(userId);
-    if (!tokenData) {return null;}
-
-    // Check if token is expired
-    if (Date.now() - tokenData.timestamp > CSRF_TOKEN_EXPIRY) {
-      this.tokens.delete(userId);
-      return null;
-    }
-
-    return tokenData;
-  }
-
-  validate(userId: string, providedToken: string): boolean {
-    const tokenData = this.get(userId);
-    if (!tokenData) {return false;}
-
-    return tokenData.token === providedToken;
-  }
-
-  remove(userId: string): void {
-    this.tokens.delete(userId);
-  }
-
-  // Clean up expired tokens
-  cleanup(): void {
-    const now = Date.now();
-    for (const [userId, tokenData] of this.tokens.entries()) {
-      if (now - tokenData.timestamp > CSRF_TOKEN_EXPIRY) {
-        this.tokens.delete(userId);
-      }
-    }
-  }
-}
-
-// Global token store instance
-const tokenStore = new CSRFTokenStore();
-
-// Run cleanup every hour
-setInterval(() => tokenStore.cleanup(), 60 * 60 * 1000);
-
-// Client-side CSRF token management
+/**
+ * CSRF Protection class for client-side token management
+ * Works with server-side httpOnly cookies and double-submit pattern
+ */
 export class CSRFProtection {
   private static instance: CSRFProtection;
   private currentToken: string | null = null;
-  private tokenTimestamp: number = 0;
+  private tokenExpiry: Date | null = null;
+  private tokenPromise: Promise<string> | null = null;
 
   private constructor() {}
 
@@ -86,167 +35,219 @@ export class CSRFProtection {
     return CSRFProtection.instance;
   }
 
-  // Generate and store a new CSRF token
-  async generateToken(): Promise<string> {
+  /**
+   * Fetch a new CSRF token from the server
+   * Server will set httpOnly cookie and return header token
+   */
+  private async fetchTokenFromServer(): Promise<CSRFToken> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         throw new Error('User not authenticated');
       }
 
-      const token = generateSecureToken();
-      const timestamp = Date.now();
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/csrf-token`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Important: Include cookies in request
+      });
 
-      // Store token in localStorage for persistence across page reloads
-      localStorage.setItem('csrf_token', token);
-      localStorage.setItem('csrf_token_timestamp', timestamp.toString());
-      localStorage.setItem('csrf_token_user', user.id);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch CSRF token');
+      }
 
-      this.currentToken = token;
-      this.tokenTimestamp = timestamp;
-
-      return token;
+      const data = await response.json();
+      return {
+        token: data.csrf_token,
+        expiresAt: data.expires_at,
+      };
     } catch (error) {
-      console.error('Failed to generate CSRF token:', error);
-      throw new Error('Failed to generate CSRF token');
+      errorTracker.trackError(error, {
+        component: 'CSRFProtection',
+        action: 'fetchTokenFromServer',
+      });
+      throw new Error('Failed to fetch CSRF token from server');
     }
   }
 
-  // Get the current CSRF token, generating one if needed
+  /**
+   * Get the current CSRF token, fetching from server if needed
+   * This returns the header token to be included in requests
+   */
   async getToken(): Promise<string> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
       // Check if we have a valid token in memory
-      if (this.currentToken && this.isTokenValid()) {
+      if (this.currentToken && this.tokenExpiry && this.tokenExpiry > new Date()) {
         return this.currentToken;
       }
 
-      // Check localStorage for existing token
-      const storedToken = localStorage.getItem('csrf_token');
-      const storedTimestamp = localStorage.getItem('csrf_token_timestamp');
-      const storedUser = localStorage.getItem('csrf_token_user');
-
-      if (storedToken && storedTimestamp && storedUser === user.id) {
-        const timestamp = parseInt(storedTimestamp, 10);
-        
-        // Check if stored token is still valid
-        if (Date.now() - timestamp < CSRF_TOKEN_EXPIRY) {
-          this.currentToken = storedToken;
-          this.tokenTimestamp = timestamp;
-          return storedToken;
-        }
+      // If a token fetch is already in progress, wait for it
+      if (this.tokenPromise) {
+        return await this.tokenPromise;
       }
 
-      // Generate a new token if none exists or expired
-      return await this.generateToken();
+      // Fetch new token from server
+      this.tokenPromise = this.fetchTokenFromServer().then(({ token, expiresAt }) => {
+        this.currentToken = token;
+        this.tokenExpiry = new Date(expiresAt);
+        this.tokenPromise = null;
+        return token;
+      });
+
+      return await this.tokenPromise;
     } catch (error) {
-      console.error('Failed to get CSRF token:', error);
-      throw new Error('Failed to get CSRF token');
+      this.tokenPromise = null;
+      errorTracker.trackError(error, {
+        component: 'CSRFProtection',
+        action: 'getToken',
+      });
+      throw error;
     }
   }
 
-  // Check if current token is valid (not expired)
-  private isTokenValid(): boolean {
-    if (!this.currentToken || !this.tokenTimestamp) {return false;}
-    return Date.now() - this.tokenTimestamp < CSRF_TOKEN_EXPIRY;
+  /**
+   * Validate a CSRF token with the server
+   */
+  async validateToken(token: string): Promise<boolean> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        return false;
+      }
+
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/csrf-token`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': token,
+        },
+        body: JSON.stringify({ csrf_token: token }),
+        credentials: 'include', // Include cookies for validation
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json();
+      return data.valid === true;
+    } catch (error) {
+      errorTracker.trackError(error, {
+        component: 'CSRFProtection',
+        action: 'validateToken',
+      });
+      return false;
+    }
   }
 
-  // Clear the current token (e.g., on logout)
+  /**
+   * Clear the current token (e.g., on logout)
+   */
   clearToken(): void {
     this.currentToken = null;
-    this.tokenTimestamp = 0;
-    localStorage.removeItem('csrf_token');
-    localStorage.removeItem('csrf_token_timestamp');
-    localStorage.removeItem('csrf_token_user');
+    this.tokenExpiry = null;
+    this.tokenPromise = null;
   }
 
-  // Validate a token (server-side validation should be primary)
-  validateToken(token: string): boolean {
-    if (!this.currentToken) {return false;}
-    return this.currentToken === token && this.isTokenValid();
+  /**
+   * Refresh the CSRF token
+   */
+  async refreshToken(): Promise<string> {
+    this.clearToken();
+    return await this.getToken();
   }
 }
 
-// Server-side CSRF validation for Edge Functions
-export const validateCSRFToken = async (
-  request: Request,
-  _expectedUserId: string
-): Promise<{ valid: boolean; error?: string }> => {
-  try {
-    // Extract CSRF token from request
-    let csrfToken: string | null = null;
-
-    // Check for token in header
-    csrfToken = request.headers.get('x-csrf-token');
-
-    // If not in header, check request body
-    if (!csrfToken) {
-      const contentType = request.headers.get('content-type');
-      if (contentType?.includes('application/json')) {
-        try {
-          const body = await request.clone().json();
-          csrfToken = body.csrf_token;
-        } catch {
-          // Ignore JSON parsing errors
-        }
-      }
-    }
-
-    if (!csrfToken) {
-      return { valid: false, error: 'CSRF token missing' };
-    }
-
-    // Validate token format
-    if (csrfToken.length !== CSRF_TOKEN_LENGTH * 2) { // hex string is 2x the byte length
-      return { valid: false, error: 'Invalid CSRF token format' };
-    }
-
-    // In a production environment, you would validate against a server-side store
-    // For now, we'll do basic format validation and rely on HTTPS + SameSite cookies
-    // for additional CSRF protection
-
-    return { valid: true };
-  } catch (error) {
-    console.error('CSRF validation error:', error);
-    return { valid: false, error: 'CSRF validation failed' };
-  }
-};
-
-// Middleware function for adding CSRF token to requests
+/**
+ * Add CSRF token to fetch requests
+ */
 export const addCSRFToken = async (requestInit: RequestInit = {}): Promise<RequestInit> => {
   try {
     const csrf = CSRFProtection.getInstance();
     const token = await csrf.getToken();
 
+    const headers = new Headers(requestInit.headers);
+    headers.set('X-CSRF-Token', token);
+
     return {
       ...requestInit,
-      headers: {
-        ...requestInit.headers,
-        'X-CSRF-Token': token,
-      },
+      headers,
+      credentials: 'include' as RequestCredentials, // Always include cookies
     };
   } catch (error) {
-    console.error('Failed to add CSRF token:', error);
-    return requestInit;
+    errorTracker.trackWarning('Failed to add CSRF token to request', {
+      component: 'CSRFProtection',
+      action: 'addCSRFToken',
+    });
+    // Return original request if CSRF token fails
+    return {
+      ...requestInit,
+      credentials: 'include' as RequestCredentials,
+    };
   }
 };
 
-// Hook for React components to get CSRF token
+/**
+ * Create a fetch wrapper that automatically includes CSRF tokens
+ */
+export const secureFetch = async (
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> => {
+  const secureInit = await addCSRFToken(init);
+  return fetch(input, secureInit);
+};
+
+/**
+ * Hook for React components to get CSRF token
+ */
 export const useCSRFToken = () => {
   const csrf = CSRFProtection.getInstance();
   
   return {
     getToken: () => csrf.getToken(),
+    refreshToken: () => csrf.refreshToken(),
     clearToken: () => csrf.clearToken(),
   };
 };
 
-// Helper function to create secure form data with CSRF token
-export const createSecureFormData = async (data: Record<string, unknown>): Promise<Record<string, unknown>> => {
+/**
+ * Create secure form data with CSRF token
+ */
+export const createSecureFormData = async (data: Record<string, unknown>): Promise<FormData> => {
+  const csrf = CSRFProtection.getInstance();
+  const token = await csrf.getToken();
+  
+  const formData = new FormData();
+  
+  // Add CSRF token
+  formData.append('csrf_token', token);
+  
+  // Add other data
+  Object.entries(data).forEach(([key, value]) => {
+    if (value instanceof File) {
+      formData.append(key, value);
+    } else if (value instanceof Blob) {
+      formData.append(key, value);
+    } else if (typeof value === 'object' && value !== null) {
+      formData.append(key, JSON.stringify(value));
+    } else {
+      formData.append(key, String(value));
+    }
+  });
+  
+  return formData;
+};
+
+/**
+ * Create secure JSON payload with CSRF token
+ */
+export const createSecureJSON = async (data: Record<string, unknown>): Promise<Record<string, unknown>> => {
   const csrf = CSRFProtection.getInstance();
   const token = await csrf.getToken();
   
@@ -256,14 +257,39 @@ export const createSecureFormData = async (data: Record<string, unknown>): Promi
   };
 };
 
-// Initialize CSRF protection on app start
+/**
+ * Initialize CSRF protection on app start
+ */
 export const initializeCSRFProtection = (): void => {
+  const csrf = CSRFProtection.getInstance();
+  
   // Clear tokens on authentication state changes
   supabase.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT') {
-      CSRFProtection.getInstance().clearToken();
+      csrf.clearToken();
+    } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      // Refresh CSRF token on sign in or token refresh
+      csrf.refreshToken().catch(error => {
+        errorTracker.trackWarning('Failed to refresh CSRF token on auth change', {
+          component: 'CSRFProtection',
+          action: 'initializeCSRFProtection',
+          metadata: { event },
+        });
+      });
     }
   });
+
+  // Periodically refresh token before expiry (every 20 hours for 24-hour tokens)
+  setInterval(() => {
+    const instance = CSRFProtection.getInstance();
+    instance.refreshToken().catch(error => {
+      errorTracker.trackWarning('Failed to refresh CSRF token periodically', {
+        component: 'CSRFProtection',
+        action: 'periodicRefresh',
+      });
+    });
+  }, 20 * 60 * 60 * 1000); // 20 hours
 };
 
+// Default export
 export default CSRFProtection;

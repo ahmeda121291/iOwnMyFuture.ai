@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from 'react-hot-toast';
 import ErrorBoundary from "./shared/components/ErrorBoundary";
 import AppRouter from "./AppRouter";
+import { initializeCSRFProtection } from "./shared/security/csrf";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -18,6 +19,10 @@ const queryClient = new QueryClient({
 });
 
 function App() {
+  useEffect(() => {
+    // Initialize CSRF protection on app start
+    initializeCSRFProtection();
+  }, []);
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

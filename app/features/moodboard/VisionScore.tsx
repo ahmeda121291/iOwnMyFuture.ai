@@ -1,115 +1,144 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import { TrendingUp, Target, Award, Flame, BookOpen } from 'lucide-react';
+import { type MoodboardElement } from '../../core/types';
+import { useVisionScore, useMotivationalMessage, useCircularProgress } from '../../hooks/useVisionScore';
 
 interface VisionScoreProps {
-  score: number;
-  numberOfJournalEntries: number;
-  numberOfGoals: number;
-  numberOfCompletedGoals: number;
-  daysActive: number;
+  elements: MoodboardElement[];
 }
 
+// Memoized sub-components
 const MetricCard = React.memo(({ 
   icon: iconComponent, 
   value, 
   label, 
-  colorClass,
-  bgClass 
-}: {
+  colorScheme 
+}: { 
   icon: React.ComponentType<{ className?: string }>;
   value: number;
   label: string;
-  colorClass: string;
-  bgClass: string;
+  colorScheme: {
+    bg: string;
+    iconBg: string;
+    text: string;
+  };
 }) => (
-  <div className={`text-center p-3 ${bgClass} rounded-xl`}>
-    <div className={`w-8 h-8 ${colorClass} rounded-full flex items-center justify-center mx-auto mb-2`}>
+  <div className={`text-center p-3 ${colorScheme.bg} rounded-xl`}>
+    <div className={`w-8 h-8 ${colorScheme.iconBg} rounded-full flex items-center justify-center mx-auto mb-2`}>
       {React.createElement(iconComponent, { className: "w-4 h-4 text-white" })}
     </div>
-    <div className={`text-lg font-bold ${colorClass.replace('bg-', 'text-')}`}>{value}</div>
-    <div className={`text-xs ${colorClass.replace('bg-', 'text-')} font-medium`}>{label}</div>
+    <div className={`text-lg font-bold ${colorScheme.text}`}>{value}</div>
+    <div className={`text-xs ${colorScheme.text} font-medium`}>{label}</div>
   </div>
 ));
 
-function VisionScore({ 
+const CircularProgress = React.memo(({ 
   score, 
-  numberOfJournalEntries, 
-  numberOfGoals, 
-  numberOfCompletedGoals, 
-  daysActive 
-}: VisionScoreProps) {
-  const getScoreColor = useCallback((score: number) => {
-    if (score >= 80) {return 'text-green-600';}
-    if (score >= 60) {return 'text-blue-600';}
-    if (score >= 40) {return 'text-yellow-600';}
-    return 'text-red-600';
-  }, []);
+  colors,
+  strokeDasharray,
+  strokeDashoffset
+}: { 
+  score: number; 
+  colors: { from: string; to: string };
+  strokeDasharray: number;
+  strokeDashoffset: number;
+}) => (
+  <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 100 100">
+    <circle
+      cx="50"
+      cy="50"
+      r="45"
+      stroke="#E5E7EB"
+      strokeWidth="4"
+      fill="transparent"
+      className="opacity-30"
+    />
+    <circle
+      cx="50"
+      cy="50"
+      r="45"
+      stroke={`url(#scoreGradient-${score})`}
+      strokeWidth="4"
+      fill="transparent"
+      strokeDasharray={strokeDasharray}
+      strokeDashoffset={strokeDashoffset}
+      strokeLinecap="round"
+      className="transition-all duration-1000 ease-out"
+    />
+    <defs>
+      <linearGradient id={`scoreGradient-${score}`} x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor={colors.from} />
+        <stop offset="100%" stopColor={colors.to} />
+      </linearGradient>
+    </defs>
+  </svg>
+));
 
-  const getScoreLabel = useCallback((score: number) => {
-    if (score >= 80) {return 'Excellent';}
-    if (score >= 60) {return 'Good';}
-    if (score >= 40) {return 'Fair';}
-    return 'Needs Work';
-  }, []);
+const MotivationalMessage = React.memo(({ message }: { message: string }) => (
+  <div className="p-4 bg-gradient-to-r from-primary/5 to-accent/5 border border-primary/10 rounded-xl">
+    <p className="text-sm text-text-primary text-center font-medium">
+      {message}
+    </p>
+  </div>
+));
 
-  const getGradientColors = useCallback((score: number) => {
-    if (score >= 80) {return { from: '#10B981', to: '#059669' };} // Green
-    if (score >= 60) {return { from: '#3B82F6', to: '#1D4ED8' };} // Blue
-    if (score >= 40) {return { from: '#F59E0B', to: '#D97706' };} // Yellow
-    return { from: '#EF4444', to: '#DC2626' }; // Red
-  }, []);
-
-  const circularProgressData = useMemo(() => {
-    const circumference = 2 * Math.PI * 45; // radius of 45
-    const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (score / 100) * circumference;
-    const colors = getGradientColors(score);
+function VisionScore({ elements }: VisionScoreProps) {
+  // Calculate score and metrics based on elements
+  const calculatedScore = useMemo(() => {
+    const elementCount = elements.length;
+    const hasGoals = elements.some(el => el.type === 'goal');
+    const hasAffirmations = elements.some(el => el.type === 'affirmation');
+    const hasQuotes = elements.some(el => el.type === 'quote');
+    const hasImages = elements.some(el => el.type === 'image');
     
-    return {
-      circumference,
-      strokeDasharray,
-      strokeDashoffset,
-      colors
-    };
-  }, [score, getGradientColors]);
+    // Score calculation
+    let score = 0;
+    score += Math.min(elementCount * 10, 40); // Up to 40 points for element count
+    score += hasGoals ? 20 : 0;
+    score += hasAffirmations ? 15 : 0;
+    score += hasQuotes ? 15 : 0;
+    score += hasImages ? 10 : 0;
+    
+    // Ensure score is between 0 and 100
+    return Math.min(100, Math.max(0, score));
+  }, [elements]);
 
-  const metricCardsData = useMemo(() => [
-    {
-      icon: Target,
-      value: numberOfGoals,
-      label: 'Goals Set',
-      colorClass: 'bg-blue-500',
-      bgClass: 'bg-gradient-to-br from-blue-50 to-blue-100'
+  // Use hooks for score data
+  const { scoreColor, scoreLabel, gradientColors } = useVisionScore(calculatedScore);
+  const motivationalMessage = useMotivationalMessage(calculatedScore);
+  const { strokeDasharray, strokeDashoffset } = useCircularProgress(calculatedScore);
+
+  // Calculate metrics
+  const metrics = useMemo(() => ({
+    goals: elements.filter(el => el.type === 'goal').length,
+    affirmations: elements.filter(el => el.type === 'affirmation').length,
+    quotes: elements.filter(el => el.type === 'quote').length,
+    images: elements.filter(el => el.type === 'image').length,
+  }), [elements]);
+
+  // Memoize color schemes for metric cards
+  const colorSchemes = useMemo(() => ({
+    goals: {
+      bg: 'bg-gradient-to-br from-blue-50 to-blue-100',
+      iconBg: 'bg-blue-500',
+      text: 'text-blue-600'
     },
-    {
-      icon: Award,
-      value: numberOfCompletedGoals,
-      label: 'Completed',
-      colorClass: 'bg-green-500',
-      bgClass: 'bg-gradient-to-br from-green-50 to-green-100'
+    affirmations: {
+      bg: 'bg-gradient-to-br from-green-50 to-green-100',
+      iconBg: 'bg-green-500',
+      text: 'text-green-600'
     },
-    {
-      icon: BookOpen,
-      value: numberOfJournalEntries,
-      label: 'Journal Entries',
-      colorClass: 'bg-purple-500',
-      bgClass: 'bg-gradient-to-br from-purple-50 to-purple-100'
+    quotes: {
+      bg: 'bg-gradient-to-br from-purple-50 to-purple-100',
+      iconBg: 'bg-purple-500',
+      text: 'text-purple-600'
     },
-    {
-      icon: Flame,
-      value: daysActive,
-      label: 'Day Streak',
-      colorClass: 'bg-orange-500',
-      bgClass: 'bg-gradient-to-br from-orange-50 to-orange-100'
+    images: {
+      bg: 'bg-gradient-to-br from-orange-50 to-orange-100',
+      iconBg: 'bg-orange-500',
+      text: 'text-orange-600'
     }
-  ], [numberOfGoals, numberOfCompletedGoals, numberOfJournalEntries, daysActive]);
-
-  const motivationalMessage = useMemo(() => {
-    if (score >= 80) {return "🌟 Amazing progress! You're crushing your goals!";}
-    if (score >= 60) {return "🚀 Great momentum! Keep up the excellent work!";}
-    if (score >= 40) {return "💪 You're building good habits. Stay consistent!";}
-    return "🌱 Every step forward counts. You've got this!";
-  }, [score]);
+  }), []);
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
@@ -119,52 +148,27 @@ function VisionScore({
           <TrendingUp className="w-5 h-5 mr-2 text-accent" />
           Vision Score
         </h3>
-        <p className="text-sm text-text-secondary mt-1">Your progress toward achieving your dreams</p>
+        <p className="text-sm text-text-secondary mt-1">Your vision board completeness</p>
       </div>
 
       <div className="p-6">
         {/* Circular Progress */}
         <div className="flex justify-center mb-6">
           <div className="relative w-36 h-36">
-            <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 100 100">
-              {/* Background Circle */}
-              <circle
-                cx="50"
-                cy="50"
-                r="45"
-                stroke="#E5E7EB"
-                strokeWidth="4"
-                fill="transparent"
-                className="opacity-30"
-              />
-              {/* Progress Circle */}
-              <circle
-                cx="50"
-                cy="50"
-                r="45"
-                stroke={`url(#scoreGradient-${score})`}
-                strokeWidth="4"
-                fill="transparent"
-                strokeDasharray={circularProgressData.strokeDasharray}
-                strokeDashoffset={circularProgressData.strokeDashoffset}
-                strokeLinecap="round"
-                className="transition-all duration-1000 ease-out"
-              />
-              <defs>
-                <linearGradient id={`scoreGradient-${score}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor={circularProgressData.colors.from} />
-                  <stop offset="100%" stopColor={circularProgressData.colors.to} />
-                </linearGradient>
-              </defs>
-            </svg>
+            <CircularProgress 
+              score={calculatedScore} 
+              colors={gradientColors}
+              strokeDasharray={strokeDasharray}
+              strokeDashoffset={strokeDashoffset}
+            />
             
             {/* Score Text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`text-3xl font-bold ${getScoreColor(score)}`}>
-                {score}
+              <span className={`text-3xl font-bold ${scoreColor}`}>
+                {calculatedScore}
               </span>
               <span className="text-xs text-text-secondary font-medium">
-                {getScoreLabel(score)}
+                {scoreLabel}
               </span>
             </div>
           </div>
@@ -172,46 +176,56 @@ function VisionScore({
 
         {/* Metrics Grid */}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {metricCardsData.map((card, index) => (
-            <MetricCard
-              key={index}
-              icon={card.icon}
-              value={card.value}
-              label={card.label}
-              colorClass={card.colorClass}
-              bgClass={card.bgClass}
-            />
-          ))}
+          <MetricCard 
+            icon={Target} 
+            value={metrics.goals} 
+            label="Goals" 
+            colorScheme={colorSchemes.goals}
+          />
+          <MetricCard 
+            icon={Award} 
+            value={metrics.affirmations} 
+            label="Affirmations" 
+            colorScheme={colorSchemes.affirmations}
+          />
+          <MetricCard 
+            icon={BookOpen} 
+            value={metrics.quotes} 
+            label="Quotes" 
+            colorScheme={colorSchemes.quotes}
+          />
+          <MetricCard 
+            icon={Flame} 
+            value={metrics.images} 
+            label="Images" 
+            colorScheme={colorSchemes.images}
+          />
         </div>
 
-        {/* Weekly Progress Bar */}
+        {/* Progress Bar */}
         <div className="mb-6">
           <div className="flex justify-between text-sm text-text-secondary mb-2">
-            <span>Weekly Progress</span>
-            <span>{score}%</span>
+            <span>Completeness</span>
+            <span>{calculatedScore}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div
               className="h-3 rounded-full transition-all duration-1000 ease-out"
               style={{ 
-                width: `${score}%`,
-                background: `linear-gradient(90deg, ${circularProgressData.colors.from}, ${circularProgressData.colors.to})`
+                width: `${calculatedScore}%`,
+                background: `linear-gradient(90deg, ${gradientColors.from}, ${gradientColors.to})`
               }}
-            ></div>
+            />
           </div>
         </div>
 
         {/* Motivational Message */}
-        <div className="p-4 bg-gradient-to-r from-primary/5 to-accent/5 border border-primary/10 rounded-xl">
-          <p className="text-sm text-text-primary text-center font-medium">
-            {motivationalMessage}
-          </p>
-        </div>
+        <MotivationalMessage message={motivationalMessage} />
 
         {/* Tips */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs text-text-secondary text-center">
-            💡 <strong>Tip:</strong> Review your vision board daily and update your journal regularly to increase your score!
+            💡 <strong>Tip:</strong> Add diverse elements like goals, affirmations, quotes, and images to boost your score!
           </p>
         </div>
       </div>

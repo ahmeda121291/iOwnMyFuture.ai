@@ -1,5 +1,6 @@
 import { type User, type AuthError } from '@supabase/supabase-js';
 import { supabase } from '../core/api/supabase';
+import { trackAuthError } from '../shared/utils/errorTracking';
 
 export interface AuthCredentials {
   email: string;
@@ -41,7 +42,7 @@ class AuthService {
 
       return { user: data.user, error: null };
     } catch (error) {
-      console.error('SignUp error:', error);
+      trackAuthError(error, 'signUp');
       return { 
         user: null, 
         error: { 
@@ -68,7 +69,7 @@ class AuthService {
 
       return { user: data.user, error: null };
     } catch (error) {
-      console.error('SignIn error:', error);
+      trackAuthError(error, 'signIn');
       return { 
         user: null, 
         error: { 
@@ -87,7 +88,7 @@ class AuthService {
       const { error } = await supabase.auth.signOut();
       return { error };
     } catch (error) {
-      console.error('SignOut error:', error);
+      trackAuthError(error, 'signOut');
       return { 
         error: { 
           message: 'Failed to sign out', 
@@ -105,7 +106,7 @@ class AuthService {
       const { data: { user } } = await supabase.auth.getUser();
       return user;
     } catch (error) {
-      console.error('GetCurrentUser error:', error);
+      trackAuthError(error, 'getCurrentUser');
       return null;
     }
   }
@@ -118,7 +119,7 @@ class AuthService {
       const { data: { session } } = await supabase.auth.getSession();
       return session;
     } catch (error) {
-      console.error('GetSession error:', error);
+      trackAuthError(error, 'getSession');
       return null;
     }
   }
@@ -135,13 +136,13 @@ class AuthService {
         .single();
 
       if (error) {
-        console.error('GetUserProfile error:', error);
+        trackAuthError(error, 'getUserProfile');
         return null;
       }
 
       return data as UserProfile;
     } catch (error) {
-      console.error('GetUserProfile error:', error);
+      trackAuthError(error, 'getUserProfile');
       return null;
     }
   }
@@ -157,7 +158,7 @@ class AuthService {
         .eq('id', userId);
 
       if (error) {
-        console.error('UpdateUserProfile error:', error);
+        trackAuthError(error, 'updateUserProfile');
         return { error: new Error(error.message) };
       }
 
@@ -171,14 +172,14 @@ class AuthService {
         });
 
         if (authError) {
-          console.error('UpdateUser auth error:', authError);
+          trackAuthError(authError, 'updateUser');
           return { error: new Error(authError.message) };
         }
       }
 
       return { error: null };
     } catch (error) {
-      console.error('UpdateUserProfile error:', error);
+      trackAuthError(error, 'updateUserProfile');
       return { error: error as Error };
     }
   }
@@ -194,7 +195,7 @@ class AuthService {
 
       return { error };
     } catch (error) {
-      console.error('ResetPassword error:', error);
+      trackAuthError(error, 'resetPassword');
       return { 
         error: { 
           message: 'Failed to send reset email', 
@@ -215,7 +216,7 @@ class AuthService {
 
       return { error };
     } catch (error) {
-      console.error('UpdatePassword error:', error);
+      trackAuthError(error, 'updatePassword');
       return { 
         error: { 
           message: 'Failed to update password', 
@@ -256,7 +257,7 @@ class AuthService {
 
       return { error };
     } catch (error) {
-      console.error('SignInWithProvider error:', error);
+      trackAuthError(error, 'signInWithProvider');
       return { 
         error: { 
           message: `Failed to sign in with ${provider}`, 
@@ -279,7 +280,7 @@ class AuthService {
 
       return { error };
     } catch (error) {
-      console.error('VerifyOtp error:', error);
+      trackAuthError(error, 'verifyOtp');
       return { 
         error: { 
           message: 'Failed to verify OTP', 

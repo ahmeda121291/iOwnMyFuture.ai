@@ -2,14 +2,20 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') || 'http://localhost:5173',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Credentials': 'true', // Required for cookies
 };
 
 const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
 const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
 const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+// Cookie configuration
+const COOKIE_NAME = 'csrf_token';
+const COOKIE_MAX_AGE = 24 * 60 * 60; // 24 hours in seconds
+const IS_PRODUCTION = Deno.env.get('ENVIRONMENT') === 'production';
 
 // Generate a cryptographically secure random token
 const generateSecureToken = (): string => {
@@ -27,10 +33,58 @@ const hashToken = async (token: string): Promise<string> => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-// Validate token against stored hash
-const validateTokenHash = async (token: string, hash: string): Promise<boolean> => {
-  const tokenHash = await hashToken(token);
-  return tokenHash === hash;
+// Create secure httpOnly cookie
+const createCSRFCookie = (token: string): string => {
+  const cookieOptions = [
+    `${COOKIE_NAME}=${token}`,
+    `HttpOnly`,
+    `Secure=${IS_PRODUCTION}`,
+    `SameSite=Strict`,
+    `Max-Age=${COOKIE_MAX_AGE}`,
+    `Path=/`,
+  ];
+  
+  if (IS_PRODUCTION) {
+    const domain = new URL(Deno.env.get('SITE_URL') || '').hostname;
+    cookieOptions.push(`Domain=${domain}`);
+  }
+  
+  return cookieOptions.join('; ');
+};
+
+// Extract CSRF token from cookies
+const extractCSRFFromCookie = (cookieHeader: string | null): string | null => {
+  if (!cookieHeader) return null;
+  
+  const cookies = cookieHeader.split(';').map(c => c.trim());
+  const csrfCookie = cookies.find(c => c.startsWith(`${COOKIE_NAME}=`));
+  
+  if (!csrfCookie) return null;
+  
+  return csrfCookie.split('=')[1];
+};
+
+// Generate a double-submit token (one for cookie, one for header/body)
+const generateDoubleSubmitTokens = (): { cookieToken: string; headerToken: string } => {
+  const baseToken = generateSecureToken();
+  const salt = generateSecureToken().substring(0, 16); // Use first 16 chars as salt
+  
+  // Cookie token is the base token
+  const cookieToken = baseToken;
+  
+  // Header token combines base token with salt
+  const headerToken = `${baseToken}.${salt}`;
+  
+  return { cookieToken, headerToken };
+};
+
+// Validate double-submit tokens
+const validateDoubleSubmitTokens = (cookieToken: string, headerToken: string): boolean => {
+  // Extract base token from header token
+  const [baseToken] = headerToken.split('.');
+  
+  // Compare base tokens
+  return baseToken === cookieToken;
 };
 
 Deno.serve(async (req: Request) => {
@@ -40,15 +94,15 @@ Deno.serve(async (req: Request) => {
 
   try {
     // Verify authentication
-    const token = req.headers.get('authorization')?.replace('Bearer ', '');
-    if (!token) {
+    const authToken = req.headers.get('authorization')?.replace('Bearer ', '');
+    if (!authToken) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authToken);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
@@ -57,25 +111,27 @@ Deno.serve(async (req: Request) => {
     }
 
     if (req.method === 'GET') {
-      // Generate new CSRF token
-      const csrfToken = generateSecureToken();
-      const tokenHash = await hashToken(csrfToken);
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      // Generate new CSRF tokens
+      const { cookieToken, headerToken } = generateDoubleSubmitTokens();
+      const tokenHash = await hashToken(cookieToken);
+      const expiresAt = new Date(Date.now() + COOKIE_MAX_AGE * 1000);
 
-      // Invalidate any existing tokens for this user
+      // Clean up old tokens for this user
       await supabase
         .from('csrf_tokens')
-        .update({ used: true })
+        .delete()
         .eq('user_id', user.id)
-        .eq('used', false);
+        .or(`expires_at.lt.${new Date().toISOString()},used.eq.true`);
 
-      // Store new token hash
+      // Store new token hash in database
       const { error: insertError } = await supabase
         .from('csrf_tokens')
         .insert({
           user_id: user.id,
           token_hash: tokenHash,
           expires_at: expiresAt.toISOString(),
+          ip_address: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip'),
+          user_agent: req.headers.get('user-agent'),
         });
 
       if (insertError) {
@@ -86,73 +142,100 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      // Set httpOnly cookie and return header token
+      const headers = new Headers(corsHeaders);
+      headers.set('Content-Type', 'application/json');
+      headers.set('Set-Cookie', createCSRFCookie(cookieToken));
+
       return new Response(JSON.stringify({ 
-        csrf_token: csrfToken,
+        csrf_token: headerToken,
         expires_at: expiresAt.toISOString()
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers,
       });
     }
 
     if (req.method === 'POST') {
-      // Validate CSRF token
-      const { csrf_token: providedToken } = await req.json();
-
-      if (!providedToken || typeof providedToken !== 'string') {
+      // Validate CSRF token using double-submit pattern
+      const cookieToken = extractCSRFFromCookie(req.headers.get('cookie'));
+      
+      if (!cookieToken) {
         return new Response(JSON.stringify({ 
           valid: false, 
-          error: 'CSRF token missing or invalid format' 
+          error: 'CSRF cookie missing' 
         }), {
-          status: 400,
+          status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // Get stored token for user
-      const { data: storedTokens, error: fetchError } = await supabase
+      // Get header token from X-CSRF-Token header or request body
+      let headerToken: string | null = req.headers.get('x-csrf-token');
+      
+      if (!headerToken) {
+        try {
+          const body = await req.clone().json();
+          headerToken = body.csrf_token;
+        } catch {
+          // Ignore JSON parsing errors
+        }
+      }
+
+      if (!headerToken) {
+        return new Response(JSON.stringify({ 
+          valid: false, 
+          error: 'CSRF token missing from header or body' 
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Validate double-submit tokens
+      const tokensValid = validateDoubleSubmitTokens(cookieToken, headerToken);
+      
+      if (!tokensValid) {
+        return new Response(JSON.stringify({ 
+          valid: false, 
+          error: 'CSRF token mismatch' 
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify token exists in database and hasn't expired
+      const tokenHash = await hashToken(cookieToken);
+      const { data: storedToken, error: fetchError } = await supabase
         .from('csrf_tokens')
-        .select('token_hash, expires_at')
+        .select('id, expires_at')
         .eq('user_id', user.id)
+        .eq('token_hash', tokenHash)
         .eq('used', false)
         .gte('expires_at', new Date().toISOString())
-        .limit(1);
+        .single();
 
-      if (fetchError) {
-        console.error('Failed to fetch CSRF token:', fetchError);
+      if (fetchError || !storedToken) {
         return new Response(JSON.stringify({ 
           valid: false, 
-          error: 'CSRF validation failed' 
+          error: 'Invalid or expired CSRF token' 
         }), {
-          status: 500,
+          status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      if (!storedTokens || storedTokens.length === 0) {
-        return new Response(JSON.stringify({ 
-          valid: false, 
-          error: 'No valid CSRF token found' 
-        }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Validate token
-      const isValid = await validateTokenHash(providedToken, storedTokens[0].token_hash);
-
-      if (isValid) {
-        // Mark token as used for one-time use (optional, can be removed for reusable tokens)
-        await supabase
-          .from('csrf_tokens')
-          .update({ used: true })
-          .eq('user_id', user.id)
-          .eq('token_hash', storedTokens[0].token_hash);
-      }
+      // Optional: Mark token as used for single-use tokens
+      // Uncomment for stricter security (requires new token for each request)
+      /*
+      await supabase
+        .from('csrf_tokens')
+        .update({ used: true })
+        .eq('id', storedToken.id);
+      */
 
       return new Response(JSON.stringify({ 
-        valid: isValid,
-        error: isValid ? undefined : 'Invalid CSRF token'
+        valid: true 
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

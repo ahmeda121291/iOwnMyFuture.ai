@@ -27,7 +27,7 @@ import {
   useShareMoodboard 
 } from '../shared/hooks/queries/useMoodboardQueries';
 import VisionSnap from '../features/moodboard/VisionSnap';
-import VisionScore from '../features/moodboard/VisionScoreOptimized';
+import VisionScore from '../features/moodboard/VisionScore';
 import Button from '../shared/components/Button';
 import Modal from '../shared/components/Modal';
 import Loader from '../shared/components/Loader';
