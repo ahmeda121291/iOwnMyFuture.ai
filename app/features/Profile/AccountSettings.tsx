@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { getCurrentUser, supabase } from '../../core/api/supabase';
 import Button from '../../shared/components/Button';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 interface UserSettings {
   full_name: string;
@@ -165,11 +167,16 @@ export default function AccountSettings() {
 
       if (profileError) {throw profileError;}
 
-      alert('Settings saved successfully!');
+      toast.success('Settings saved successfully!');
       setSettings(prev => ({ ...prev, password: '', confirmPassword: '' }));
     } catch (error: unknown) {
-      console.error('Error saving settings:', error);
-      alert(error.message || 'Failed to save settings. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save settings';
+      errorTracker.trackError(error, { 
+        component: 'AccountSettings', 
+        action: 'saveSettings',
+        errorMessage 
+      });
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }

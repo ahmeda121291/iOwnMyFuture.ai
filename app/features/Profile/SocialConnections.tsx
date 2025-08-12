@@ -15,6 +15,8 @@ import {
 import { supabase, getCurrentUser } from '../../core/api/supabase';
 import { type SocialIntegration } from '../../core/types';
 import Button from '../../shared/components/Button';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 const socialServices = [
   {
@@ -105,8 +107,12 @@ export default function SocialConnections() {
       
       await loadConnections();
     } catch (error) {
-      console.error('Error connecting service:', error);
-      alert('Failed to connect service. In a production app, this would open OAuth flow.');
+      errorTracker.trackError(error, { 
+        component: 'SocialConnections', 
+        action: 'connectService',
+        serviceName 
+      });
+      toast.error('Failed to connect service. OAuth integration coming soon.');
     } finally {
       setConnecting(null);
     }
@@ -127,8 +133,12 @@ export default function SocialConnections() {
       
       await loadConnections();
     } catch (error) {
-      console.error('Error disconnecting service:', error);
-      alert('Failed to disconnect service. Please try again.');
+      errorTracker.trackError(error, { 
+        component: 'SocialConnections', 
+        action: 'disconnectService',
+        serviceName 
+      });
+      toast.error('Failed to disconnect service. Please try again.');
     }
   };
 
@@ -142,10 +152,13 @@ export default function SocialConnections() {
       await navigator.clipboard.writeText(shareUrl);
       
       // Show success message
-      alert('Share link copied to clipboard!');
+      toast.success('Share link copied to clipboard!');
     } catch (error) {
-      console.error('Error copying link:', error);
-      alert('Failed to copy link. Please try again.');
+      errorTracker.trackError(error, { 
+        component: 'SocialConnections', 
+        action: 'copyShareLink' 
+      });
+      toast.error('Failed to copy link. Please try again.');
     } finally {
       setCopyingLink(false);
     }
@@ -156,10 +169,13 @@ export default function SocialConnections() {
     try {
       // In a real app, this would send an email via your backend
       await new Promise(resolve => setTimeout(resolve, 2000));
-      alert('Weekly summary will be sent to your email shortly!');
+      toast.success('Weekly summary will be sent to your email shortly!');
     } catch (error) {
-      console.error('Error sending summary:', error);
-      alert('Failed to send summary. Please try again.');
+      errorTracker.trackError(error, { 
+        component: 'SocialConnections', 
+        action: 'sendWeeklySummary' 
+      });
+      toast.error('Failed to send summary. Please try again.');
     } finally {
       setSendingEmail(false);
     }
@@ -240,7 +256,7 @@ export default function SocialConnections() {
                       <Button
                         variant="secondary"
                         size="small"
-                        onClick={() => alert(`Quick share to ${service.name} coming soon!`)}
+                        onClick={() => toast.info(`Quick share to ${service.name} coming soon!`)}
                         className="text-xs"
                       >
                         <ExternalLink className="w-3 h-3 mr-1" />

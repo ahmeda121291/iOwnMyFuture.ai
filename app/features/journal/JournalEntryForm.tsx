@@ -176,7 +176,7 @@ export default function JournalEntryForm({
 
   const generateAISummary = useCallback(async () => {
     if (!content.trim() || wordCount < MIN_WORDS_FOR_SUMMARY) {
-      alert(`Please write at least ${MIN_WORDS_FOR_SUMMARY} words before generating a summary.`);
+      toast.error(`Please write at least ${MIN_WORDS_FOR_SUMMARY} words before generating a summary.`);
       return;
     }
 
@@ -198,7 +198,7 @@ export default function JournalEntryForm({
       }
     } catch (error) {
       errorTracker.trackError(error, { component: 'JournalEntryForm', action: 'generateSummary' });
-      alert('Failed to generate AI summary. Please try again.');
+      toast.error('Failed to generate AI summary. Please try again.');
     } finally {
       setGeneratingSummary(false);
     }

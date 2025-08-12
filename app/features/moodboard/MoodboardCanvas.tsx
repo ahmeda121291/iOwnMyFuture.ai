@@ -3,6 +3,8 @@ import { Trash2, Download, Share, Sparkles } from 'lucide-react';
 import { type MoodboardElement } from '../../core/types';
 import { MoodboardElementSchema, validateData } from '../../shared/validation/schemas';
 import { useCSRFToken, createSecureFormData } from '../../shared/security/csrf';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 // Typed Props interface
 interface MoodboardCanvasProps {
@@ -140,7 +142,7 @@ export default function MoodboardCanvas({
   const _handleSecureSave = useCallback(async () => {
     // Check for validation errors
     if (Object.keys(validationErrors).length > 0) {
-      alert('Please fix validation errors before saving.');
+      toast.error('Please fix validation errors before saving.');
       return;
     }
 
@@ -155,8 +157,11 @@ export default function MoodboardCanvas({
       // Call the parent's onSave function
       await onSave();
     } catch (error) {
-      console.error('Error saving moodboard:', error);
-      alert('Failed to save moodboard. Please try again.');
+      errorTracker.trackError(error, { 
+        component: 'MoodboardCanvas', 
+        action: 'saveMoodboard' 
+      });
+      toast.error('Failed to save moodboard. Please try again.');
     } finally {
       _setIsSaving(false);
     }
@@ -180,7 +185,7 @@ export default function MoodboardCanvas({
     } else {
       // Fallback: copy to clipboard
       navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}\n${shareData.url}`);
-      alert('Vision board details copied to clipboard!');
+      toast.success('Vision board details copied to clipboard!');
     }
   }, []);
 

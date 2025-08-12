@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Brain, Loader2, X, Sparkles } from 'lucide-react';
 import { supabase } from '../../core/api/supabase';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 interface AISummaryButtonProps {
   content: string;
@@ -25,7 +27,7 @@ export default function AISummaryButton({
 
   const generateAISummary = async () => {
     if (!content.trim() || wordCount < minWords) {
-      alert(`Please write at least ${minWords} words before generating a summary.`);
+      toast.error(`Please write at least ${minWords} words before generating a summary.`);
       return;
     }
 
@@ -46,8 +48,11 @@ export default function AISummaryButton({
         onSummaryGenerated?.(result.summary);
       }
     } catch (error) {
-      console.error('Error generating summary:', error);
-      alert('Failed to generate AI summary. Please try again.');
+      errorTracker.trackError(error, { 
+        component: 'AISummaryButton', 
+        action: 'generateSummary' 
+      });
+      toast.error('Failed to generate AI summary. Please try again.');
     } finally {
       setGeneratingSummary(false);
     }
@@ -119,7 +124,7 @@ export default function AISummaryButton({
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(summary);
-                  alert('Summary copied to clipboard!');
+                  toast.success('Summary copied to clipboard!');
                 }}
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors"
               >

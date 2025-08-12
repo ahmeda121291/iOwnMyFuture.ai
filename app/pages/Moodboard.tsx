@@ -139,7 +139,7 @@ export default function MoodboardPage() {
       });
       
       setIsEditing(false);
-      alert('Moodboard saved successfully!');
+      toast.success('Moodboard saved successfully!');
     } catch (error) {
       errorTracker.trackError(error, { component: 'Moodboard', action: 'saveMoodboard' });
       toast.error('Failed to save moodboard. Please try again.');

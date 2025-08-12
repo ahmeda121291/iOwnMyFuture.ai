@@ -4,6 +4,8 @@ import { generateAdvancedMoodboard } from '../../core/api/openai';
 import { supabase } from '../../core/api/supabase';
 import { type MoodboardElement } from '../../core/types';
 import Button from '../../shared/components/Button';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 interface VisionSnapProps {
   onAddElement: (element: MoodboardElement) => void;
@@ -143,8 +145,11 @@ export default function VisionSnap({ onAddElement, moodboardId, moodboardData }:
 
       setAiPrompt('');
     } catch (error) {
-      console.error('Error generating AI elements:', error);
-      alert('Failed to generate AI elements. Please try again.');
+      errorTracker.trackError(error, { 
+        component: 'VisionSnap', 
+        action: 'generateAIElements' 
+      });
+      toast.error('Failed to generate AI elements. Please try again.');
     } finally {
       setGenerating(false);
     }
@@ -316,8 +321,11 @@ export default function VisionSnap({ onAddElement, moodboardId, moodboardData }:
                   const tweetUrl = encodeURIComponent(publicUrl);
                   window.open(`https://twitter.com/intent/tweet?text=${tweetText}&url=${tweetUrl}`, '_blank');
                 } catch (error) {
-                  console.error('Error creating share link:', error);
-                  alert('Failed to create share link. Please try again.');
+                  errorTracker.trackError(error, { 
+                    component: 'VisionSnap', 
+                    action: 'createShareLink' 
+                  });
+                  toast.error('Failed to create share link. Please try again.');
                 } finally {
                   setSharing(false);
                 }
@@ -335,7 +343,7 @@ export default function VisionSnap({ onAddElement, moodboardId, moodboardData }:
                 if (shareUrl) {
                   // Copy existing URL
                   navigator.clipboard.writeText(shareUrl);
-                  alert('Share link copied to clipboard!');
+                  toast.success('Share link copied to clipboard!');
                 } else {
                   // Generate new snapshot
                   setSharing(true);
@@ -357,10 +365,13 @@ export default function VisionSnap({ onAddElement, moodboardId, moodboardData }:
                     setShareUrl(publicUrl);
                     
                     navigator.clipboard.writeText(publicUrl);
-                    alert('Share link copied to clipboard!');
+                    toast.success('Share link copied to clipboard!');
                   } catch (error) {
-                    console.error('Error creating share link:', error);
-                    alert('Failed to create share link. Please try again.');
+                    errorTracker.trackError(error, { 
+                      component: 'VisionSnap', 
+                      action: 'createPublicShareLink' 
+                    });
+                    toast.error('Failed to create share link. Please try again.');
                   } finally {
                     setSharing(false);
                   }

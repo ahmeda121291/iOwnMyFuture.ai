@@ -14,6 +14,8 @@ import { getUserSubscription, supabase } from '../../core/api/supabase';
 import { getProductByPriceId } from '../../core/api/stripeConfig';
 import Button from '../../shared/components/Button';
 import Modal from '../../shared/components/Modal';
+import toast from 'react-hot-toast';
+import { errorTracker } from '../../shared/utils/errorTracking';
 
 // Typed Props interface
 interface SubscriptionStatusProps {
@@ -133,12 +135,13 @@ export default function SubscriptionStatus({ compact = false }: SubscriptionStat
         throw new Error('No billing portal URL received');
       }
     } catch (error: unknown) {
-      console.error('Error opening billing portal:', error);
-      alert(
-        `Failed to open billing portal: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`
-      );
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      errorTracker.trackError(error, { 
+        component: 'SubscriptionStatus', 
+        action: 'openBillingPortal',
+        errorMessage 
+      });
+      toast.error(`Failed to open billing portal: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
