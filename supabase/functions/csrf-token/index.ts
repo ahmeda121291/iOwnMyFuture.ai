@@ -1,8 +1,11 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
+// Use production URL as fallback if SITE_URL not configured
+const siteUrl = Deno.env.get('SITE_URL') || 'https://iownmyfuture.ai';
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') || 'http://localhost:5173',
+  'Access-Control-Allow-Origin': siteUrl,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Credentials': 'true', // Required for cookies

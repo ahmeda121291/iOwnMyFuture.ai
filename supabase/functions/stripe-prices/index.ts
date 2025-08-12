@@ -2,10 +2,14 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 
+// Get the site URL from environment or use production URL as fallback
+const siteUrl = Deno.env.get('SITE_URL') || 'https://iownmyfuture.ai';
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': siteUrl,
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Credentials': 'true',
 };
 
 const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
@@ -34,22 +38,20 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Verify authentication
+    // Authentication is optional for fetching prices
     const token = req.headers.get('authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    let user = null;
+    
+    if (token) {
+      const { data, error: authError } = await supabase.auth.getUser(token);
+      user = data?.user;
+      if (authError) {
+        console.warn('stripe-prices auth error (non-fatal):', authError);
+      }
     }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    
+    // Log whether user is authenticated (for debugging)
+    console.log('Fetching prices for:', user ? `user ${user.id}` : 'anonymous user');
 
     // Retrieve prices for both products
     const [monthlyPrices, yearlyPrices] = await Promise.all([

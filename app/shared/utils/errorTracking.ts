@@ -316,8 +316,13 @@ class ErrorTracker {
         });
 
       if (error) {
-        // Log to console but don't throw to avoid infinite loops
-        console.error('Failed to log error to Supabase:', error);
+        // Check if error is due to missing table (PGRST116: relation does not exist)
+        if (error.code === 'PGRST116' || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+          console.warn('Error logs table does not exist. Run migration: 20250813000000_create_error_logs.sql');
+        } else {
+          // Log other errors to console but don't throw to avoid infinite loops
+          console.error('Failed to log error to Supabase:', error);
+        }
       }
     } catch (error) {
       // Fail silently to avoid infinite error loops

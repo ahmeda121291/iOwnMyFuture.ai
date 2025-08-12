@@ -48,20 +48,25 @@ class StripePricesService {
   }
 
   private async fetchPricesFromAPI(): Promise<StripePrices> {
+    // Authentication is optional for fetching prices
     const { data: { session } } = await supabase.auth.getSession();
     
-    if (!session?.access_token) {
-      throw new Error('User not authenticated');
-    }
-
     const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-prices`;
+    
+    // Build headers - include auth token if available
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
     
     const response = await fetch(apiUrl, {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      },
+      headers,
+      mode: 'cors',
+      credentials: session ? 'include' : 'omit', // Only send credentials if authenticated
     });
 
     if (!response.ok) {
