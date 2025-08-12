@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Check, Zap } from 'lucide-react';
+import { Zap, Brain, BookOpen, Target, TrendingUp, Sparkles, Shield, Cloud, HeadphonesIcon } from 'lucide-react';
 import { type Product } from '../../core/api/stripeConfig';
 import { createCheckoutSession } from '../../core/api/stripeClient';
 import Button from '../../shared/components/Button';
@@ -97,16 +97,16 @@ const PricingCard = React.memo(function PricingCard({ product, isPopular = false
     }
   };
 
-  // Unified features array shared across all pricing displays
+  // Unified features array with icons shared across all pricing displays
   const features = useMemo(() => [
-    'AI-Powered Vision Boards',
-    'Smart Journaling with AI Insights',
-    'Goal Tracking & Achievement',
-    'Progress Analytics & Reports',
-    'Personalized Recommendations',
-    'Mobile & Desktop Access',
-    'Cloud Sync & Backup',
-    '24/7 Customer Support'
+    { icon: Brain, text: 'AI-Powered Vision Boards' },
+    { icon: BookOpen, text: 'Smart Journaling with AI Insights' },
+    { icon: Target, text: 'Goal Tracking & Achievement' },
+    { icon: TrendingUp, text: 'Progress Analytics & Reports' },
+    { icon: Sparkles, text: 'Personalized Recommendations' },
+    { icon: Shield, text: 'Mobile & Desktop Access' },
+    { icon: Cloud, text: 'Cloud Sync & Backup' },
+    { icon: HeadphonesIcon, text: '24/7 Customer Support' }
   ], []);
 
   const formattedPrice = useMemo(() => {
@@ -147,12 +147,15 @@ const PricingCard = React.memo(function PricingCard({ product, isPopular = false
       </div>
 
       <ul className="space-y-3 mb-8">
-        {features.map((feature, index) => (
-          <li key={index} className="flex items-center">
-            <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-            <span className="text-text-secondary">{feature}</span>
-          </li>
-        ))}
+        {features.map((feature, index) => {
+          const IconComponent = feature.icon;
+          return (
+            <li key={index} className="flex items-center">
+              <IconComponent className="w-5 h-5 text-accent mr-3 flex-shrink-0" />
+              <span className="text-text-secondary">{feature.text}</span>
+            </li>
+          );
+        })}
       </ul>
 
       <Button

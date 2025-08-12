@@ -95,7 +95,7 @@ export default function InsightsPage() {
       if (entriesError) {throw entriesError;}
       setJournalEntries(entries || []);
 
-      // Load moodboards instead of moodboard_updates (table doesn't exist)
+      // Load moodboards data
       const { data: moodboardData, error: moodboardError } = await supabase
         .from('moodboards')
         .select('id, updated_at')
