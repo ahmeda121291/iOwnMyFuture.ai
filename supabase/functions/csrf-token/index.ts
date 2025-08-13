@@ -5,21 +5,6 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 const PROJECT_URL = Deno.env.get('PROJECT_URL');
 const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY');
 
-if (!PROJECT_URL || !SERVICE_ROLE_KEY) {
-  console.error('Missing required environment variables: PROJECT_URL or SERVICE_ROLE_KEY');
-  // Return a function that always returns an error response
-  Deno.serve(() => {
-    return new Response(JSON.stringify({ 
-      error: 'Server configuration error: Missing required environment variables' 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  });
-  // Exit early to prevent further execution
-  Deno.exit(1);
-}
-
 // Use production URL as fallback if SITE_URL not configured
 const SITE_URL = Deno.env.get('SITE_URL') || 'https://iownmyfuture.ai';
 const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
@@ -31,6 +16,21 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Credentials': 'true', // Required for cookies
 } as const;
+
+// Check if environment variables are present
+if (!PROJECT_URL || !SERVICE_ROLE_KEY) {
+  console.error('Missing PROJECT_URL or SERVICE_ROLE_KEY');
+  Deno.serve(() => {
+    return new Response(JSON.stringify({ 
+      error: 'Configuration error' 
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  });
+  // Exit early to prevent further execution
+  Deno.exit(1);
+}
 
 // Initialize Supabase client with validated environment variables
 const supabase = createClient(PROJECT_URL, SERVICE_ROLE_KEY);
@@ -123,15 +123,15 @@ const validateDoubleSubmitTokens = (cookieToken: string, headerToken: string): b
 // Clean up expired or used tokens
 const cleanupOldTokens = async (userId: string): Promise<void> => {
   try {
-    const now = new Date().toISOString();
+    const nowIso = new Date().toISOString();
     const { error } = await supabase
       .from('csrf_tokens')
       .delete()
       .eq('user_id', userId)
-      .or(`expires_at.lt.${now},used.eq.true`);
+      .or(`expires_at.lt.${nowIso},used.eq.true`);
     
     if (error) {
-      console.error('Error cleaning up old tokens:', error);
+      console.error('Error cleaning up old tokens:', error.message);
     }
   } catch (error) {
     console.error('Error in cleanup operation:', error);
@@ -172,21 +172,31 @@ Deno.serve(async (req: Request) => {
       await cleanupOldTokens(user.id);
 
       // Store new token hash in database
-      const { error: insertError } = await supabase
-        .from('csrf_tokens')
-        .insert({
-          user_id: user.id,
-          token_hash: tokenHash,
-          expires_at: expiresAt.toISOString(),
-          ip_address: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-          user_agent: req.headers.get('user-agent') || 'unknown',
-          used: false,
-        });
+      try {
+        const { error: insertError } = await supabase
+          .from('csrf_tokens')
+          .insert({
+            user_id: user.id,
+            token_hash: tokenHash,
+            expires_at: expiresAt.toISOString(),
+            ip_address: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+            user_agent: req.headers.get('user-agent') || 'unknown',
+            used: false,
+          });
 
-      if (insertError) {
-        console.error('Failed to store CSRF token in database:', insertError);
+        if (insertError) {
+          console.error('Failed to store CSRF token in database:', insertError.message);
+          return new Response(JSON.stringify({ 
+            error: insertError.message
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } catch (error) {
+        console.error('Error inserting CSRF token:', error);
         return new Response(JSON.stringify({ 
-          error: `Failed to generate CSRF token: ${insertError.message}` 
+          error: 'Failed to generate CSRF token'
         }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -257,63 +267,79 @@ Deno.serve(async (req: Request) => {
 
       // Verify token exists in database and hasn't expired
       const tokenHash = await hashToken(cookieToken);
-      const now = new Date().toISOString();
+      const nowIso = new Date().toISOString();
       
-      const { data: storedToken, error: fetchError } = await supabase
-        .from('csrf_tokens')
-        .select('id, expires_at, used')
-        .eq('user_id', user.id)
-        .eq('token_hash', tokenHash)
-        .gte('expires_at', now)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching stored token:', fetchError);
-        return new Response(JSON.stringify({ 
-          valid: false, 
-          error: `Database error: ${fetchError.message}` 
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (!storedToken) {
-        return new Response(JSON.stringify({ 
-          valid: false, 
-          error: 'CSRF token not found in database - token may be expired or invalid' 
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Check if token has already been used (if replay protection is enabled)
-      if (storedToken.used) {
-        console.warn(`Attempted reuse of CSRF token for user ${user.id}`);
-        return new Response(JSON.stringify({ 
-          valid: false, 
-          error: 'CSRF token has already been used - possible replay attack' 
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Mark token as used for single-use tokens (replay attack protection)
-      // Enable this for stricter security
-      const ENABLE_REPLAY_PROTECTION = true;
-      
-      if (ENABLE_REPLAY_PROTECTION) {
-        const { error: updateError } = await supabase
+      try {
+        const { data: storedToken, error: fetchError } = await supabase
           .from('csrf_tokens')
-          .update({ used: true, used_at: new Date().toISOString() })
-          .eq('id', storedToken.id);
-        
-        if (updateError) {
-          console.error('Error marking token as used:', updateError);
-          // Continue despite error - token validation succeeded
+          .select('id, expires_at, used')
+          .eq('user_id', user.id)
+          .eq('token_hash', tokenHash)
+          .gte('expires_at', nowIso)
+          .single();
+
+        if (fetchError) {
+          console.error('Error fetching stored token:', fetchError.message);
+          return new Response(JSON.stringify({ 
+            valid: false, 
+            error: fetchError.message
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
         }
+
+        if (!storedToken) {
+          return new Response(JSON.stringify({ 
+            valid: false, 
+            error: 'CSRF token not found in database - token may be expired or invalid' 
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Check if token has already been used (if replay protection is enabled)
+        if (storedToken.used) {
+          console.warn(`Attempted reuse of CSRF token for user ${user.id}`);
+          return new Response(JSON.stringify({ 
+            valid: false, 
+            error: 'CSRF token has already been used - possible replay attack' 
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Mark token as used for single-use tokens (replay attack protection)
+        // Enable this for stricter security
+        const ENABLE_REPLAY_PROTECTION = true;
+        
+        if (ENABLE_REPLAY_PROTECTION) {
+          try {
+            const { error: updateError } = await supabase
+              .from('csrf_tokens')
+              .update({ used: true, used_at: new Date().toISOString() })
+              .eq('id', storedToken.id);
+            
+            if (updateError) {
+              console.error('Error marking token as used:', updateError.message);
+              // Continue despite error - token validation succeeded
+            }
+          } catch (error) {
+            console.error('Error updating token status:', error);
+            // Continue despite error - token validation succeeded
+          }
+        }
+      } catch (error) {
+        console.error('Error validating CSRF token:', error);
+        return new Response(JSON.stringify({ 
+          valid: false, 
+          error: 'Failed to validate CSRF token'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       return new Response(JSON.stringify({ 
