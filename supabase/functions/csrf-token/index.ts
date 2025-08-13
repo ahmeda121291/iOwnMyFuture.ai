@@ -1,8 +1,9 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 // Validate required environment variables
 const PROJECT_URL = Deno.env.get('PROJECT_URL');
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY');
 
 // Use production URL as fallback if SITE_URL not configured
@@ -11,29 +12,29 @@ const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
 const IS_PRODUCTION = ENVIRONMENT === 'production';
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': SITE_URL,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Credentials': 'true', // Required for cookies
+  ['Access-Control-Allow-Origin']: SITE_URL,
+  ['Access-Control-Allow-Headers']: 'authorization, x-client-info, apikey, content-type, x-csrf-token',
+  ['Access-Control-Allow-Methods']: 'GET, POST, OPTIONS',
+  ['Access-Control-Allow-Credentials']: 'true', // Required for cookies
 } as const;
 
 // Check if environment variables are present
-if (!PROJECT_URL || !SERVICE_ROLE_KEY) {
-  console.error('Missing PROJECT_URL or SERVICE_ROLE_KEY');
+if (!PROJECT_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
+  console.error('Missing PROJECT_URL, SUPABASE_ANON_KEY, or SERVICE_ROLE_KEY');
   Deno.serve(() => {
     return new Response(JSON.stringify({ 
       error: 'Configuration error' 
     }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
     });
   });
   // Exit early to prevent further execution
   Deno.exit(1);
 }
 
-// Initialize Supabase client with validated environment variables
-const supabase = createClient(PROJECT_URL, SERVICE_ROLE_KEY);
+// Initialize Supabase admin client (only for auth verification)
+const supabaseAdmin = createClient(PROJECT_URL, SERVICE_ROLE_KEY);
 
 // Cookie configuration
 const COOKIE_NAME = 'csrf_token';
@@ -82,12 +83,12 @@ const createCSRFCookie = (token: string): string => {
 
 // Extract CSRF token from cookies
 const extractCSRFFromCookie = (cookieHeader: string | null): string | null => {
-  if (!cookieHeader) return null;
+  if (!cookieHeader) {return null;}
   
   const cookies = cookieHeader.split(';').map(c => c.trim());
   const csrfCookie = cookies.find(c => c.startsWith(`${COOKIE_NAME}=`));
   
-  if (!csrfCookie) return null;
+  if (!csrfCookie) {return null;}
   
   return csrfCookie.split('=')[1];
 };
@@ -121,10 +122,10 @@ const validateDoubleSubmitTokens = (cookieToken: string, headerToken: string): b
 };
 
 // Clean up expired or used tokens
-const cleanupOldTokens = async (userId: string): Promise<void> => {
+const cleanupOldTokens = async (supabaseClient: SupabaseClient, userId: string): Promise<void> => {
   try {
     const nowIso = new Date().toISOString();
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('csrf_tokens')
       .delete()
       .eq('user_id', userId)
@@ -149,18 +150,27 @@ Deno.serve(async (req: Request) => {
     if (!authToken) {
       return new Response(JSON.stringify({ error: 'Unauthorized: No authentication token provided' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
       });
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(authToken);
+    // Use admin client only for auth verification
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(authToken);
     if (authError || !user) {
       console.error('Authentication error:', authError);
       return new Response(JSON.stringify({ error: 'Invalid authentication token' }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
       });
     }
+
+    // Create a user-authenticated Supabase client for database operations
+    // This ensures RLS policies work correctly with auth.uid()
+    const supabaseUser = createClient(PROJECT_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: { Authorization: `Bearer ${authToken}` },
+      },
+    });
 
     if (req.method === 'GET') {
       // Generate new CSRF tokens
@@ -169,7 +179,7 @@ Deno.serve(async (req: Request) => {
       const expiresAt = new Date(Date.now() + COOKIE_MAX_AGE * 1000);
 
       // Clean up old tokens for this user
-      await cleanupOldTokens(user.id);
+      await cleanupOldTokens(supabaseUser, user.id);
 
       // Store new token hash in database
       try {
@@ -198,7 +208,7 @@ Deno.serve(async (req: Request) => {
         }
         
         try {
-          const { error: insertError } = await supabase
+          const { error: insertError } = await supabaseUser
             .from('csrf_tokens')
             .insert(insertPayload);
 
@@ -208,10 +218,9 @@ Deno.serve(async (req: Request) => {
             
             // If the error is related to IP address, retry without it
             if (insertError.message.includes('ip_address') || insertError.message.includes('inet')) {
-              console.log('Retrying without IP address due to validation error');
               delete insertPayload.ip_address;
               
-              const { error: retryError } = await supabase
+              const { error: retryError } = await supabaseUser
                 .from('csrf_tokens')
                 .insert(insertPayload);
               
@@ -221,18 +230,16 @@ Deno.serve(async (req: Request) => {
                   error: retryError.message
                 }), {
                   status: 500,
-                  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                  headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
                 });
               }
-              // Success on retry without IP
-              console.log('CSRF token stored successfully without IP address');
             } else {
               // Non-IP related error, return error response
               return new Response(JSON.stringify({ 
                 error: insertError.message
               }), {
                 status: 500,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
               });
             }
           }
@@ -241,7 +248,7 @@ Deno.serve(async (req: Request) => {
           // Try one more time without IP address as fallback
           delete insertPayload.ip_address;
           
-          const { error: fallbackError } = await supabase
+          const { error: fallbackError } = await supabaseUser
             .from('csrf_tokens')
             .insert(insertPayload);
           
@@ -251,7 +258,7 @@ Deno.serve(async (req: Request) => {
               error: 'Failed to generate CSRF token'
             }), {
               status: 500,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
             });
           }
         }
@@ -261,7 +268,7 @@ Deno.serve(async (req: Request) => {
           error: 'Failed to generate CSRF token'
         }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -288,7 +295,7 @@ Deno.serve(async (req: Request) => {
           error: 'CSRF cookie missing - please request a new token' 
         }), {
           status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -310,7 +317,7 @@ Deno.serve(async (req: Request) => {
           error: 'CSRF token missing from header (X-CSRF-Token) or request body' 
         }), {
           status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -323,7 +330,7 @@ Deno.serve(async (req: Request) => {
           error: 'CSRF token mismatch between cookie and header/body' 
         }), {
           status: 403,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -332,7 +339,7 @@ Deno.serve(async (req: Request) => {
       const nowIso = new Date().toISOString();
       
       try {
-        const { data: storedToken, error: fetchError } = await supabase
+        const { data: storedToken, error: fetchError } = await supabaseUser
           .from('csrf_tokens')
           .select('id, expires_at, used')
           .eq('user_id', user.id)
@@ -347,7 +354,7 @@ Deno.serve(async (req: Request) => {
             error: fetchError.message
           }), {
             status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
           });
         }
 
@@ -357,7 +364,7 @@ Deno.serve(async (req: Request) => {
             error: 'CSRF token not found in database - token may be expired or invalid' 
           }), {
             status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
           });
         }
 
@@ -369,7 +376,7 @@ Deno.serve(async (req: Request) => {
             error: 'CSRF token has already been used - possible replay attack' 
           }), {
             status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
           });
         }
 
@@ -379,7 +386,7 @@ Deno.serve(async (req: Request) => {
         
         if (ENABLE_REPLAY_PROTECTION) {
           try {
-            const { error: updateError } = await supabase
+            const { error: updateError } = await supabaseUser
               .from('csrf_tokens')
               .update({ used: true, used_at: new Date().toISOString() })
               .eq('id', storedToken.id);
@@ -400,7 +407,7 @@ Deno.serve(async (req: Request) => {
           error: 'Failed to validate CSRF token'
         }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -408,13 +415,13 @@ Deno.serve(async (req: Request) => {
         valid: true,
         message: 'CSRF token validated successfully'
       }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
       });
     }
 
     return new Response(JSON.stringify({ error: 'Method not allowed - only GET and POST are supported' }), {
       status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -425,7 +432,7 @@ Deno.serve(async (req: Request) => {
       details: IS_PRODUCTION ? undefined : errorMessage
     }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
     });
   }
 });
