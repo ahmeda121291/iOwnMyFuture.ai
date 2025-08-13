@@ -173,25 +173,87 @@ Deno.serve(async (req: Request) => {
 
       // Store new token hash in database
       try {
-        const { error: insertError } = await supabase
-          .from('csrf_tokens')
-          .insert({
-            user_id: user.id,
-            token_hash: tokenHash,
-            expires_at: expiresAt.toISOString(),
-            ip_address: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-            user_agent: req.headers.get('user-agent') || 'unknown',
-            used: false,
-          });
+        // Parse IP address from x-forwarded-for header (take first IP if comma-separated)
+        const forwardedFor = req.headers.get('x-forwarded-for') ?? '';
+        const ipAddress = forwardedFor.split(',')[0].trim();
+        
+        // Build insert payload dynamically
+        const insertPayload: Record<string, string | boolean> = {
+          user_id: user.id,
+          token_hash: tokenHash,
+          expires_at: expiresAt.toISOString(),
+          user_agent: req.headers.get('user-agent') || 'unknown',
+          used: false,
+        };
+        
+        // Only add ip_address if it's a non-empty string
+        if (ipAddress) {
+          insertPayload.ip_address = ipAddress;
+        } else {
+          // Try alternative headers if x-forwarded-for is empty
+          const realIp = req.headers.get('x-real-ip');
+          if (realIp) {
+            insertPayload.ip_address = realIp;
+          }
+        }
+        
+        try {
+          const { error: insertError } = await supabase
+            .from('csrf_tokens')
+            .insert(insertPayload);
 
-        if (insertError) {
-          console.error('Failed to store CSRF token in database:', insertError.message);
-          return new Response(JSON.stringify({ 
-            error: insertError.message
-          }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          if (insertError) {
+            // Log the error but continue if it's just an IP address issue
+            console.error('Failed to store CSRF token in database:', insertError.message);
+            
+            // If the error is related to IP address, retry without it
+            if (insertError.message.includes('ip_address') || insertError.message.includes('inet')) {
+              console.log('Retrying without IP address due to validation error');
+              delete insertPayload.ip_address;
+              
+              const { error: retryError } = await supabase
+                .from('csrf_tokens')
+                .insert(insertPayload);
+              
+              if (retryError) {
+                console.error('Failed to store CSRF token even without IP:', retryError.message);
+                return new Response(JSON.stringify({ 
+                  error: retryError.message
+                }), {
+                  status: 500,
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                });
+              }
+              // Success on retry without IP
+              console.log('CSRF token stored successfully without IP address');
+            } else {
+              // Non-IP related error, return error response
+              return new Response(JSON.stringify({ 
+                error: insertError.message
+              }), {
+                status: 500,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+          }
+        } catch (innerError) {
+          console.error('Error during token insertion:', innerError);
+          // Try one more time without IP address as fallback
+          delete insertPayload.ip_address;
+          
+          const { error: fallbackError } = await supabase
+            .from('csrf_tokens')
+            .insert(insertPayload);
+          
+          if (fallbackError) {
+            console.error('Final fallback failed:', fallbackError.message);
+            return new Response(JSON.stringify({ 
+              error: 'Failed to generate CSRF token'
+            }), {
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
         }
       } catch (error) {
         console.error('Error inserting CSRF token:', error);
