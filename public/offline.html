@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - iOwnMyFuture.ai</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #F5F5FA 0%, #C3B1E1 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+    
+    .icon {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      background: linear-gradient(135deg, #C3B1E1 0%, #8A2BE2 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .icon svg {
+      width: 40px;
+      height: 40px;
+      fill: white;
+    }
+    
+    h1 {
+      font-size: 28px;
+      color: #1F2937;
+      margin-bottom: 16px;
+      font-weight: 700;
+    }
+    
+    p {
+      color: #6B7280;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    
+    .button {
+      display: inline-block;
+      padding: 12px 32px;
+      background: linear-gradient(135deg, #C3B1E1 0%, #8A2BE2 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 16px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+    
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(138, 43, 226, 0.3);
+    }
+    
+    .status {
+      margin-top: 32px;
+      padding-top: 32px;
+      border-top: 1px solid #E5E7EB;
+    }
+    
+    .status-text {
+      font-size: 14px;
+      color: #9CA3AF;
+    }
+    
+    .online { color: #10B981; }
+    .offline { color: #EF4444; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+      </svg>
+    </div>
+    
+    <h1>You're Offline</h1>
+    
+    <p>
+      It looks like you've lost your internet connection. 
+      Don't worry, your data is safe! We'll sync everything 
+      once you're back online.
+    </p>
+    
+    <button class="button" onclick="tryReconnect()">
+      Try Again
+    </button>
+    
+    <div class="status">
+      <p class="status-text">
+        Status: <span id="status" class="offline">Offline</span>
+      </p>
+    </div>
+  </div>
+  
+  <script>
+    function tryReconnect() {
+      window.location.reload();
+    }
+    
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      if (navigator.onLine) {
+        statusEl.textContent = 'Online';
+        statusEl.className = 'online';
+        // Auto-reload when back online
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        statusEl.textContent = 'Offline';
+        statusEl.className = 'offline';
+      }
+    }
+    
+    // Check connection status
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    
+    // Check every 5 seconds
+    setInterval(updateStatus, 5000);
+    
+    // Initial check
+    updateStatus();
+  </script>
+</body>
+</html>

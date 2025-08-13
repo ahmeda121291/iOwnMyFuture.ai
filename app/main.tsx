@@ -4,9 +4,26 @@ import * as Sentry from '@sentry/react';
 import App from './App.tsx';
 import './styles/globals.css';
 import { initSentry } from './config/sentry';
+import { checkForRedirectAfterRefresh } from './utils/lazyWithRetry';
 
 // Initialize Sentry before rendering the app
 initSentry();
+
+// Check for redirect after refresh (for lazy loading recovery)
+checkForRedirectAfterRefresh();
+
+// Register service worker for PWA support
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
+        console.log('ServiceWorker registered:', registration);
+      })
+      .catch(error => {
+        console.error('ServiceWorker registration failed:', error);
+      });
+  });
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
