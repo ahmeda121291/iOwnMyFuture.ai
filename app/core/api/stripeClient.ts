@@ -2,6 +2,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import type { Stripe } from '@stripe/stripe-js';
 import { supabase } from './supabase';
 import { secureFetch, createSecureJSON } from '../../shared/security/csrf';
+import toast from 'react-hot-toast';
 
 let stripePromise: Promise<Stripe | null> | null = null;
 
@@ -85,12 +86,20 @@ export const createCheckoutSession = async (options: CreateCheckoutSessionOption
   console.log('[stripeClient] Creating checkout session at:', apiUrl);
   
   // Prepare request body with CSRF token included
-  const requestBody = await createSecureJSON({
-    price_id: params.priceId,
-    mode: params.mode || 'subscription',
-    success_url: params.successUrl || `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: params.cancelUrl || `${window.location.origin}/pricing`,
-  });
+  let requestBody;
+  try {
+    requestBody = await createSecureJSON({
+      price_id: params.priceId,
+      mode: params.mode || 'subscription',
+      success_url: params.successUrl || `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: params.cancelUrl || `${window.location.origin}/pricing`,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[stripeClient] Failed to fetch CSRF token:', error);
+    toast.error(`Could not fetch CSRF token: ${errorMessage}`);
+    throw new Error(`Failed to get CSRF token: ${errorMessage}`);
+  }
 
   console.log('[stripeClient] Sending checkout request to:', apiUrl);
   console.log('[stripeClient] Request body:', { ...requestBody, csrf_token: 'REDACTED' });
@@ -141,15 +150,24 @@ export const createBillingPortalSession = async (options?: CreateBillingPortalSe
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session?.access_token) {
+    toast.error('Please sign in to manage your subscription');
     throw new Error('User not authenticated');
   }
 
   const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-portal`;
   
   // Prepare request body with CSRF token
-  const requestBody = await createSecureJSON({
-    return_url: options?.returnUrl || window.location.href,
-  });
+  let requestBody;
+  try {
+    requestBody = await createSecureJSON({
+      return_url: options?.returnUrl || window.location.href,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[stripeClient] Failed to fetch CSRF token for billing portal:', error);
+    toast.error(`Could not fetch CSRF token: ${errorMessage}`);
+    throw new Error(`Failed to get CSRF token: ${errorMessage}`);
+  }
   
   // Use secureFetch for CSRF protection
   const response = await secureFetch(apiUrl, {

@@ -43,7 +43,7 @@ export class CSRFProtection {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('User not authenticated');
+        throw new Error('User not authenticated - please sign in to continue');
       }
 
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/csrf-token`, {
@@ -56,21 +56,37 @@ export class CSRFProtection {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch CSRF token');
+        let errorMessage = 'Failed to fetch CSRF token';
+        try {
+          const error = await response.json();
+          errorMessage = error.error || errorMessage;
+        } catch {
+          errorMessage = `Failed to fetch CSRF token (status: ${response.status})`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      
+      if (!data.csrf_token) {
+        throw new Error('Invalid CSRF token response - token missing');
+      }
+      
       return {
         token: data.csrf_token,
-        expiresAt: data.expires_at,
+        expiresAt: data.expires_at || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error fetching CSRF token';
+      
       errorTracker.trackError(error, {
         component: 'CSRFProtection',
         action: 'fetchTokenFromServer',
+        metadata: { errorMessage },
       });
-      throw new Error('Failed to fetch CSRF token from server');
+      
+      // Re-throw with clear error message
+      throw new Error(errorMessage);
     }
   }
 
