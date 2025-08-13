@@ -6,6 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { type User } from '../../core/types'
 import { errorTracker } from '../utils/errorTracking'
 import toast from 'react-hot-toast'
+import Button from './Button'
 
 // ============= Public Navigation Component =============
 function PublicNav({ 
@@ -37,18 +38,21 @@ function PublicNav({
           <DollarSign size={18} className="mr-1.5" />
           Pricing
         </NavButton>
-        <button 
+        <Button
+          variant="primary"
+          size="sm"
           onClick={() => navigate('/auth')}
-          className="ml-4 px-5 py-2 bg-primary text-white rounded-full font-medium hover:bg-primary-600 transition-all duration-200"
+          className="ml-4"
         >
           Get Started
-        </button>
-        <button 
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => navigate('/auth')}
-          className="px-5 py-2 border border-primary text-primary rounded-full font-medium hover:bg-primary/10 transition-all duration-200"
         >
           Sign In
-        </button>
+        </Button>
       </div>
 
       {/* Mobile Public Navigation */}
@@ -159,13 +163,14 @@ function PrivateNav({
           </NavButton>
         )}
         <div className="flex items-center space-x-2 ml-4">
-          <button 
+          <Button
+            variant="danger"
+            size="sm"
             onClick={handleSignOut}
-            className="flex items-center space-x-2 px-4 py-2 rounded-full text-red-600 hover:bg-red-50 transition-colors"
+            icon={<LogOut size={18} />}
           >
-            <LogOut size={18} />
-            <span className="text-sm font-medium">Sign Out</span>
-          </button>
+            Sign Out
+          </Button>
         </div>
       </div>
 

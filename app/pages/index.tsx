@@ -254,18 +254,20 @@ export default function LandingPage() {
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-6 mb-16">
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-16 px-4">
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
                 <Button
+                  variant="gradient"
+                  size="lg"
                   onClick={handleStartJournaling}
                   disabled={isAuthChecking}
-                  className="group relative overflow-hidden bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-accent-500/25 transform transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  loading={isAuthChecking}
+                  icon={<ArrowRight className="w-5 h-5" />}
+                  iconPosition="right"
+                  fullWidth={false}
+                  className="min-w-[250px]"
                 >
-                  <span className="relative z-10 flex items-center">
-                    {isAuthChecking ? 'Loading...' : user ? 'Enter Dashboard' : 'Start Journaling Now'}
-                    <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-accent-500 to-primary-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  {user ? 'Enter Dashboard' : 'Start Journaling Now'}
                 </Button>
               </motion.div>
               
@@ -274,13 +276,17 @@ export default function LandingPage() {
                 smooth={true}
                 duration={500}
                 offset={-80}
+                className="w-full sm:w-auto"
               >
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                   <Button
-                    className="group flex items-center px-8 py-4 bg-white/60 backdrop-blur-sm hover:bg-white/80 text-gray-800 rounded-full text-lg font-semibold border border-white/40 hover:border-white/60 transition-all duration-300 cursor-pointer"
+                    variant="secondary"
+                    size="lg"
+                    icon={<ArrowRight className="w-5 h-5" />}
+                    iconPosition="right"
+                    className="min-w-[250px] cursor-pointer"
                   >
                     Learn How It Works
-                    <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </motion.div>
               </ScrollLink>
@@ -389,12 +395,15 @@ export default function LandingPage() {
             className="text-center mt-16"
           >
             <Button
+              variant="gradient"
+              size="lg"
               onClick={handleStartJournaling}
               disabled={isAuthChecking}
-              className="bg-gradient-to-r from-primary-500 to-accent-500 hover:from-primary-600 hover:to-accent-600 text-white px-12 py-4 rounded-full text-lg font-semibold shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={isAuthChecking}
+              icon={<ArrowRight className="w-5 h-5" />}
+              iconPosition="right"
             >
-              {isAuthChecking ? 'Loading...' : user ? 'Continue Journaling' : 'Try It Free Today'}
-              <ArrowRight className="inline-block w-5 h-5 ml-2" />
+              {user ? 'Continue Journaling' : 'Try It Free Today'}
             </Button>
           </motion.div>
         </div>
@@ -640,19 +649,26 @@ export default function LandingPage() {
             Join thousands who've already transformed their lives with AI-powered personal development.
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 px-4">
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
               <Button
+                variant="secondary"
+                size="lg"
                 onClick={handleStartJournaling}
                 disabled={isAuthChecking}
-                className="bg-white text-gray-900 hover:bg-gray-100 px-12 py-4 rounded-full text-lg font-semibold shadow-2xl hover:shadow-white/25 transform transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={isAuthChecking}
+                className="bg-white text-gray-900 hover:bg-gray-100 min-w-[280px]"
+                icon={<ArrowRight className="w-5 h-5" />}
+                iconPosition="right"
               >
-                {isAuthChecking ? 'Loading...' : user ? 'Continue Your Journey' : 'Begin Your Transformation'}
+                {user ? 'Continue Your Journey' : 'Begin Your Transformation'}
               </Button>
             </motion.div>
             {!user && (
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full sm:w-auto">
                 <Button
+                  variant="ghost"
+                  size="lg"
                   onClick={() => {
                     try {
                       navigate('/pricing');
@@ -665,7 +681,7 @@ export default function LandingPage() {
                     }
                   }}
                   disabled={isAuthChecking}
-                  className="border-2 border-white/30 text-white hover:bg-white/10 px-10 py-4 rounded-full text-lg font-semibold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="border-2 border-white/30 text-white hover:bg-white/10 min-w-[200px]"
                 >
                   View Pricing
                 </Button>

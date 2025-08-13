@@ -161,10 +161,12 @@ const PricingCard = React.memo(function PricingCard({ product, isPopular = false
       <Button
         onClick={handleSubscribe}
         loading={loading}
-        className="w-full"
-        variant={isPopular ? 'primary' : 'secondary'}
+        fullWidth
+        variant={isPopular ? 'gradient' : 'primary'}
+        size="lg"
+        icon={<Zap className="w-4 h-4" />}
+        iconPosition="left"
       >
-        <Zap className="w-4 h-4 mr-2" />
         {product.mode === 'subscription' ? 'Start Subscription' : 'Buy Now'}
       </Button>
     </div>
