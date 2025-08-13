@@ -252,7 +252,7 @@ export default function Navbar() {
           const userData = await getCurrentUser();
           if (userData) {
             setUser(userData);
-            const adminStatus = await checkIsAdmin(userData.id);
+            const adminStatus = await checkIsAdmin();
             setIsAdmin(adminStatus);
           }
         } else {
@@ -281,7 +281,7 @@ export default function Navbar() {
           const userData = await getCurrentUser();
           setUser(userData);
           if (userData) {
-            const adminStatus = await checkIsAdmin(userData.id);
+            const adminStatus = await checkIsAdmin();
             setIsAdmin(adminStatus);
           }
         } else {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
-import { getCurrentUser, supabase } from '../../core/api/supabase';
+import { getCurrentUser } from '../../core/api/supabase';
+import { checkIsAdmin } from '../../core/api/admin';
 import Loader from './Loader';
 
 interface AdminRouteProps {
@@ -19,16 +20,9 @@ export default function AdminRoute({ children }: AdminRouteProps) {
         return;
       }
 
-      // Check if user has admin privileges
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('is_admin')
-        .eq('id', user.id)
-        .single();
-
-      if (!error && profile?.is_admin) {
-        setIsAdmin(true);
-      }
+      // Check if user has admin privileges using the edge function
+      const adminStatus = await checkIsAdmin();
+      setIsAdmin(adminStatus);
     } catch (error) {
       console.error('Error checking admin access:', error);
     } finally {

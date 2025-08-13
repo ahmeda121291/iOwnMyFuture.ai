@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "@typescript-eslint/naming-convention": [
+      "error",
+      {
+        "selector": "objectLiteralProperty",
+        "format": null,
+        "filter": {
+          "regex": "^(Content-Type|Access-Control-.*)",
+          "match": true
+        }
+      }
+    ]
+  }
+}

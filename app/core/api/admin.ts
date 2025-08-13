@@ -1,18 +1,28 @@
 import { supabase } from './supabase';
 
-export async function checkIsAdmin(userId: string): Promise<boolean> {
+export async function checkIsAdmin(userId?: string): Promise<boolean> {
   try {
-    const { data: profile, error } = await supabase
-      .from('user_profiles')
-      .select('is_admin')
-      .eq('id', userId)
-      .single();
-
-    if (error || !profile) {
+    // Get the current session to get the auth token
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
       return false;
     }
 
-    return profile.is_admin === true;
+    // Call the edge function to check admin status
+    const { data, error } = await supabase.functions.invoke('get-admin-status', {
+      body: userId ? { userId } : {},
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (error || !data) {
+      console.error('Error checking admin status:', error);
+      return false;
+    }
+
+    return data.isAdmin === true;
   } catch (error) {
     console.error('Error checking admin status:', error);
     return false;
@@ -25,7 +35,7 @@ export async function setAdminStatus(userId: string, isAdmin: boolean): Promise<
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {return false;}
 
-    const currentUserIsAdmin = await checkIsAdmin(user.id);
+    const currentUserIsAdmin = await checkIsAdmin();
     if (!currentUserIsAdmin) {return false;}
 
     const { error } = await supabase
