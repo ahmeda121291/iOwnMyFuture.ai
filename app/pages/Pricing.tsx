@@ -18,11 +18,11 @@ export default function PricingPage() {
     document.title = 'Pricing - MyFutureSelf.ai | Transform Your Life with AI'
     const metaDescription = document.querySelector('meta[name="description"]')
     if (metaDescription) {
-      metaDescription.setAttribute('content', 'Choose the Pro plan that fits your journey. Monthly at $15 or yearly at $180 (save $36). Unlimited AI vision boards, smart journaling, and progress analytics.')
+      metaDescription.setAttribute('content', 'Choose the Pro plan that fits your journey. Monthly at $18 or yearly with discount. Unlimited AI vision boards, smart journaling, and progress analytics.')
     } else {
       const meta = document.createElement('meta')
       meta.name = 'description'
-      meta.content = 'Choose the Pro plan that fits your journey. Monthly at $15 or yearly at $180 (save $36). Unlimited AI vision boards, smart journaling, and progress analytics.'
+      meta.content = 'Choose the Pro plan that fits your journey. Monthly at $18 or yearly with discount. Unlimited AI vision boards, smart journaling, and progress analytics.'
       document.head.appendChild(meta)
     }
   }, []);
@@ -90,8 +90,8 @@ export default function PricingPage() {
   // Get price IDs from fetched prices
   const monthlyPriceId = prices?.monthly.priceId;
   const yearlyPriceId = prices?.yearly.priceId;
-  const monthlyAmount = prices?.monthly.amount || 1500; // Fallback to $15
-  const yearlyAmount = prices?.yearly.amount || 18000; // Fallback to $180
+  const monthlyAmount = prices?.monthly.amount || 1800; // Fallback to $18
+  const yearlyAmount = prices?.yearly.amount || 21600; // Fallback to $216
   const savings = getSavings();
 
   // Show loader while fetching prices

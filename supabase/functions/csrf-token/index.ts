@@ -33,8 +33,10 @@ if (!PROJECT_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
   Deno.exit(1);
 }
 
-// Initialize Supabase admin client (only for auth verification)
-const supabaseAdmin = createClient(PROJECT_URL, SERVICE_ROLE_KEY);
+// Initialize Supabase client with service role key for bypassing RLS
+const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
+const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
+const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 // Cookie configuration
 const COOKIE_NAME = 'csrf_token';
@@ -154,8 +156,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Use admin client only for auth verification
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(authToken);
+    // Use service role client for auth verification
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authToken);
     if (authError || !user) {
       console.error('Authentication error:', authError);
       return new Response(JSON.stringify({ error: 'Invalid authentication token' }), {
@@ -164,13 +166,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Create a user-authenticated Supabase client for database operations
-    // This ensures RLS policies work correctly with auth.uid()
-    const supabaseUser = createClient(PROJECT_URL, SUPABASE_ANON_KEY, {
-      global: {
-        headers: { Authorization: `Bearer ${authToken}` },
-      },
-    });
+    // No need for user-authenticated client - we use service role key to bypass RLS
 
     if (req.method === 'GET') {
       // Generate new CSRF tokens
@@ -179,7 +175,7 @@ Deno.serve(async (req: Request) => {
       const expiresAt = new Date(Date.now() + COOKIE_MAX_AGE * 1000);
 
       // Clean up old tokens for this user
-      await cleanupOldTokens(supabaseUser, user.id);
+      await cleanupOldTokens(supabase, user.id);
 
       // Store new token hash in database
       try {
@@ -208,7 +204,7 @@ Deno.serve(async (req: Request) => {
         }
         
         try {
-          const { error: insertError } = await supabaseUser
+          const { error: insertError } = await supabase
             .from('csrf_tokens')
             .insert(insertPayload);
 
@@ -220,7 +216,7 @@ Deno.serve(async (req: Request) => {
             if (insertError.message.includes('ip_address') || insertError.message.includes('inet')) {
               delete insertPayload.ip_address;
               
-              const { error: retryError } = await supabaseUser
+              const { error: retryError } = await supabase
                 .from('csrf_tokens')
                 .insert(insertPayload);
               
@@ -248,7 +244,7 @@ Deno.serve(async (req: Request) => {
           // Try one more time without IP address as fallback
           delete insertPayload.ip_address;
           
-          const { error: fallbackError } = await supabaseUser
+          const { error: fallbackError } = await supabase
             .from('csrf_tokens')
             .insert(insertPayload);
           
@@ -339,7 +335,7 @@ Deno.serve(async (req: Request) => {
       const nowIso = new Date().toISOString();
       
       try {
-        const { data: storedToken, error: fetchError } = await supabaseUser
+        const { data: storedToken, error: fetchError } = await supabase
           .from('csrf_tokens')
           .select('id, expires_at, used')
           .eq('user_id', user.id)
@@ -386,7 +382,7 @@ Deno.serve(async (req: Request) => {
         
         if (ENABLE_REPLAY_PROTECTION) {
           try {
-            const { error: updateError } = await supabaseUser
+            const { error: updateError } = await supabase
               .from('csrf_tokens')
               .update({ used: true, used_at: new Date().toISOString() })
               .eq('id', storedToken.id);

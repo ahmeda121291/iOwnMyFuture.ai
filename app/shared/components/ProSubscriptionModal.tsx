@@ -55,8 +55,9 @@ export default function ProSubscriptionModal({ isOpen }: ProSubscriptionModalPro
             <div>
               <p className="text-sm text-gray-600">Starting at</p>
               <p className="text-2xl font-bold text-gray-900">
-                $9<span className="text-base font-normal text-gray-600">/month</span>
+                $18<span className="text-base font-normal text-gray-600">/month</span>
               </p>
+              <p className="text-xs text-gray-500 mt-1">Yearly discount available</p>
             </div>
             <Star className="h-8 w-8 text-yellow-500" />
           </div>
