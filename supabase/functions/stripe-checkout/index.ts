@@ -2,7 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { z } from 'npm:zod@3.25.76';
-import { authenticateAndValidateCSRF, handleCORS } from '../_shared/csrf-middleware.ts';
+import { authenticateAndValidateCSRF } from '../_shared/csrf-middleware.ts';
 import type { AuthenticatedUser } from '../_shared/csrf-middleware.ts';
 
 // Read environment variables from the Edge Function secrets
@@ -16,14 +16,29 @@ const stripe = new Stripe(stripeSecret, {
   appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
 });
 
-const corsHeaders = {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  'Access-Control-Allow-Origin': '*',
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  'Access-Control-Allow-Headers': '*',
-};
+// Allowed origins for CORS
+const allowedOrigins = [
+  'https://iownmyfuture.ai',
+  'https://www.iownmyfuture.ai',
+];
+
+// CORS helper function
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get('Origin') ?? '';
+  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  return {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Origin': allowOrigin,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Credentials': 'true',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Vary': 'Origin',
+  } as const;
+}
 
 // Zod schema for request validation
 const CheckoutRequestSchema = z.object({
@@ -35,18 +50,22 @@ const CheckoutRequestSchema = z.object({
 });
 
 // Helper to build CORS responses
-function corsResponse(body: string | object | null, status = 200) {
+function corsResponse(req: Request, body: string | object | null, status = 200) {
+  const cors = corsHeadersFor(req);
+  
   if (status === 204) {
-    return new Response(null, { status, headers: corsHeaders });
+    return new Response(null, { status, headers: cors });
   }
 
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' }, // eslint-disable-line @typescript-eslint/naming-convention
+    headers: { ...cors, 'Content-Type': 'application/json' }, // eslint-disable-line @typescript-eslint/naming-convention
   });
 }
 
 Deno.serve(async (req) => {
+  const cors = corsHeadersFor(req);
+  
   // eslint-disable-next-line no-console
   console.log('[stripe-checkout] Request received:', {
     method: req.method,
@@ -61,13 +80,14 @@ Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') {
       // eslint-disable-next-line no-console
       console.log('[stripe-checkout] Handling OPTIONS request');
-      return handleCORS(corsHeaders);
+      // Preflight request
+      return new Response(null, { status: 204, headers: cors });
     }
 
     if (req.method !== 'POST') {
       // eslint-disable-next-line no-console
       console.log('[stripe-checkout] Invalid method:', req.method);
-      return corsResponse({ error: 'Method not allowed' }, 405);
+      return corsResponse(req, { error: 'Method not allowed' }, 405);
     }
 
     // eslint-disable-next-line no-console
@@ -78,7 +98,7 @@ Deno.serve(async (req) => {
     
     // Authenticate and validate CSRF token
     const authResult = await authenticateAndValidateCSRF(req, { 
-      corsHeaders,
+      corsHeaders: cors,
       requireCSRF 
     });
     if (!authResult.success) {
@@ -111,7 +131,7 @@ Deno.serve(async (req) => {
         .map(err => `${err.path.join('.')}: ${err.message}`)
         .join(', ');
       console.error('[stripe-checkout] Validation failed:', errorMessage);
-      return corsResponse({ error: `Validation error: ${errorMessage}` }, 400);
+      return corsResponse(req, { error: `Validation error: ${errorMessage}` }, 400);
     }
 
     const { price_id: priceId, success_url: successUrl, cancel_url: cancelUrl, mode } = validationResult.data;
@@ -131,7 +151,7 @@ Deno.serve(async (req) => {
     if (getCustomerError) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch customer information from the database', getCustomerError);
-      return corsResponse({ error: 'Failed to fetch customer information' }, 500);
+      return corsResponse(req, { error: 'Failed to fetch customer information' }, 500);
     }
 
     let customerId: string;
@@ -154,19 +174,19 @@ Deno.serve(async (req) => {
       if (!price.active) {
         // eslint-disable-next-line no-console
         console.error(`[stripe-checkout] Attempted to use inactive price: ${priceId}`);
-        return corsResponse({ error: 'Invalid or inactive price ID' }, 400);
+        return corsResponse(req, { error: 'Invalid or inactive price ID' }, 400);
       }
       
       // Additional validation: ensure price is for the correct product
       if (mode === 'subscription' && price.type !== 'recurring') {
         // eslint-disable-next-line no-console
         console.error(`[stripe-checkout] Price type mismatch: expected recurring, got ${price.type}`);
-        return corsResponse({ error: 'Invalid price type for subscription' }, 400);
+        return corsResponse(req, { error: 'Invalid price type for subscription' }, 400);
       }
       if (mode === 'payment' && price.type !== 'one_time') {
         // eslint-disable-next-line no-console
         console.error(`[stripe-checkout] Price type mismatch: expected one_time, got ${price.type}`);
-        return corsResponse({ error: 'Invalid price type for one-time payment' }, 400);
+        return corsResponse(req, { error: 'Invalid price type for one-time payment' }, 400);
       }
       
       // eslint-disable-next-line no-console
@@ -180,7 +200,7 @@ Deno.serve(async (req) => {
         type: priceError.type,
         statusCode: priceError.statusCode
       });
-      return corsResponse({ error: `Invalid or inaccessible price ID: ${priceError.message}` }, 400);
+      return corsResponse(req, { error: `Invalid or inaccessible price ID: ${priceError.message}` }, 400);
     }
 
     // Create Stripe customer mapping if none exists
@@ -208,7 +228,7 @@ Deno.serve(async (req) => {
           // eslint-disable-next-line no-console
           console.error('Failed to clean up after customer mapping error:', deleteError);
         }
-        return corsResponse({ error: 'Failed to create customer mapping' }, 500);
+        return corsResponse(req, { error: 'Failed to create customer mapping' }, 500);
       }
 
       if (mode === 'subscription') {
@@ -226,7 +246,7 @@ Deno.serve(async (req) => {
             // eslint-disable-next-line no-console
             console.error('Failed to delete Stripe customer after subscription creation error:', deleteError);
           }
-          return corsResponse({ error: 'Unable to save the subscription in the database' }, 500);
+          return corsResponse(req, { error: 'Unable to save the subscription in the database' }, 500);
         }
       }
 
@@ -247,7 +267,7 @@ Deno.serve(async (req) => {
         if (getSubscriptionError) {
           // eslint-disable-next-line no-console
           console.error('Failed to fetch subscription information from the database', getSubscriptionError);
-          return corsResponse({ error: 'Failed to fetch subscription information' }, 500);
+          return corsResponse(req, { error: 'Failed to fetch subscription information' }, 500);
         }
 
         if (!subscription) {
@@ -260,13 +280,13 @@ Deno.serve(async (req) => {
           if (createSubscriptionError) {
             // eslint-disable-next-line no-console
             console.error('Failed to create subscription record for existing customer', createSubscriptionError);
-            return corsResponse({ error: 'Failed to create subscription record for existing customer' }, 500);
+            return corsResponse(req, { error: 'Failed to create subscription record for existing customer' }, 500);
           }
         } else if (subscription.status === 'active' || subscription.status === 'trialing') {
           // Prevent creating a new subscription if one is already active
           // eslint-disable-next-line no-console
           console.error(`User ${user.id} attempted to create subscription while having active status: ${subscription.status}`);
-          return corsResponse({ error: 'Active subscription already exists' }, 400);
+          return corsResponse(req, { error: 'Active subscription already exists' }, 400);
         }
       }
     }
@@ -276,14 +296,14 @@ Deno.serve(async (req) => {
     if (stripeCustomer.deleted) {
       // eslint-disable-next-line no-console
       console.error(`Attempted to use deleted customer: ${customerId}`);
-      return corsResponse({ error: 'Invalid customer' }, 400);
+      return corsResponse(req, { error: 'Invalid customer' }, 400);
     }
     
     // Verify the customer metadata matches the authenticated user
     if (stripeCustomer.metadata?.userId && stripeCustomer.metadata.userId !== user.id) {
       // eslint-disable-next-line no-console
       console.error(`Customer ${customerId} does not belong to user ${user.id}`);
-      return corsResponse({ error: 'Unauthorized' }, 403);
+      return corsResponse(req, { error: 'Unauthorized' }, 403);
     }
 
     // Create Stripe Checkout session with client_reference_id for webhook validation
@@ -327,7 +347,7 @@ Deno.serve(async (req) => {
     if (!session.url) {
       // eslint-disable-next-line no-console
       console.error(`[stripe-checkout] Session created but URL is missing!`);
-      return corsResponse({ error: 'Checkout session created but URL not available' }, 500);
+      return corsResponse(req, { error: 'Checkout session created but URL not available' }, 500);
     }
 
     // eslint-disable-next-line no-console
@@ -342,7 +362,7 @@ Deno.serve(async (req) => {
     // eslint-disable-next-line no-console
     console.log(`[stripe-checkout] Sending success response with sessionId and url`);
     
-    return corsResponse(responseData);
+    return corsResponse(req, responseData);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     // eslint-disable-next-line no-console
@@ -352,11 +372,11 @@ Deno.serve(async (req) => {
     
     // Return more specific error message in development
     if (Deno.env.get('ENVIRONMENT') !== 'production') {
-      return corsResponse({ 
+      return corsResponse(req, { 
         error: `Failed to create checkout session: ${errorMessage}` 
       }, 500);
     }
     
-    return corsResponse({ error: 'Failed to create checkout session' }, 500);
+    return corsResponse(req, { error: 'Failed to create checkout session' }, 500);
   }
 });

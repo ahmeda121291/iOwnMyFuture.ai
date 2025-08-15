@@ -10,22 +10,40 @@ const SITE_URL = Deno.env.get('SITE_URL') || 'https://iownmyfuture.ai';
 const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
 const IS_PRODUCTION = ENVIRONMENT === 'production';
 
-const corsHeaders = {
-  ['Access-Control-Allow-Origin']: SITE_URL,
-  ['Access-Control-Allow-Headers']: 'authorization, x-client-info, apikey, content-type, x-csrf-token',
-  ['Access-Control-Allow-Methods']: 'GET, POST, OPTIONS',
-  ['Access-Control-Allow-Credentials']: 'true', // Required for cookies
-} as const;
+// Allowed origins for CORS
+const allowedOrigins = [
+  'https://iownmyfuture.ai',
+  'https://www.iownmyfuture.ai',
+];
+
+// CORS helper function
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get('Origin') ?? '';
+  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  return {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Origin': allowOrigin,
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Access-Control-Allow-Credentials': 'true',
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    'Vary': 'Origin',
+  } as const;
+}
 
 // Check if environment variables are present
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
-  Deno.serve(() => {
+  Deno.serve((req) => {
+    const cors = corsHeadersFor(req);
     return new Response(JSON.stringify({ 
       error: 'Configuration error' 
     }), {
       status: 500,
-      headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+      headers: { ...cors, ['Content-Type']: 'application/json' },
     });
   });
   // Exit early to prevent further execution
@@ -136,8 +154,11 @@ const cleanupOldTokens = async (supabaseClient: SupabaseClient, userId: string):
 };
 
 Deno.serve(async (req: Request) => {
+  const cors = corsHeadersFor(req);
+  
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    // Preflight request
+    return new Response(null, { status: 204, headers: cors });
   }
 
   try {
@@ -146,7 +167,7 @@ Deno.serve(async (req: Request) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized: No authentication token provided' }), {
         status: 401,
-        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+        headers: { ...cors, ['Content-Type']: 'application/json' },
       });
     }
 
@@ -154,7 +175,7 @@ Deno.serve(async (req: Request) => {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       return new Response(JSON.stringify({ error: 'Configuration error' }), {
         status: 500,
-        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+        headers: { ...cors, ['Content-Type']: 'application/json' },
       });
     }
     
@@ -168,7 +189,7 @@ Deno.serve(async (req: Request) => {
       console.error('Authentication error:', authError);
       return new Response(JSON.stringify({ error: 'Invalid authentication token' }), {
         status: 401,
-        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+        headers: { ...cors, ['Content-Type']: 'application/json' },
       });
     }
 
@@ -230,7 +251,7 @@ Deno.serve(async (req: Request) => {
                   error: retryError.message
                 }), {
                   status: 500,
-                  headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+                  headers: { ...cors, ['Content-Type']: 'application/json' },
                 });
               }
             } else {
@@ -239,7 +260,7 @@ Deno.serve(async (req: Request) => {
                 error: insertError.message
               }), {
                 status: 500,
-                headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+                headers: { ...cors, ['Content-Type']: 'application/json' },
               });
             }
           }
@@ -258,7 +279,7 @@ Deno.serve(async (req: Request) => {
               error: 'Failed to generate CSRF token'
             }), {
               status: 500,
-              headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+              headers: { ...cors, ['Content-Type']: 'application/json' },
             });
           }
         }
@@ -268,12 +289,12 @@ Deno.serve(async (req: Request) => {
           error: 'Failed to generate CSRF token'
         }), {
           status: 500,
-          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+          headers: { ...cors, ['Content-Type']: 'application/json' },
         });
       }
 
       // Set httpOnly cookie and return header token
-      const headers = new Headers(corsHeaders);
+      const headers = new Headers(cors);
       headers.set('Content-Type', 'application/json');
       headers.set('Set-Cookie', createCSRFCookie(cookieToken));
 
@@ -295,7 +316,7 @@ Deno.serve(async (req: Request) => {
           error: 'CSRF cookie missing - please request a new token' 
         }), {
           status: 403,
-          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+          headers: { ...cors, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -317,7 +338,7 @@ Deno.serve(async (req: Request) => {
           error: 'CSRF token missing from header (X-CSRF-Token) or request body' 
         }), {
           status: 403,
-          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+          headers: { ...cors, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -330,7 +351,7 @@ Deno.serve(async (req: Request) => {
           error: 'CSRF token mismatch between cookie and header/body' 
         }), {
           status: 403,
-          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+          headers: { ...cors, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -354,7 +375,7 @@ Deno.serve(async (req: Request) => {
             error: fetchError.message
           }), {
             status: 403,
-            headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+            headers: { ...cors, ['Content-Type']: 'application/json' },
           });
         }
 
@@ -364,7 +385,7 @@ Deno.serve(async (req: Request) => {
             error: 'CSRF token not found in database - token may be expired or invalid' 
           }), {
             status: 403,
-            headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+            headers: { ...cors, ['Content-Type']: 'application/json' },
           });
         }
 
@@ -376,7 +397,7 @@ Deno.serve(async (req: Request) => {
             error: 'CSRF token has already been used - possible replay attack' 
           }), {
             status: 403,
-            headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+            headers: { ...cors, ['Content-Type']: 'application/json' },
           });
         }
 
@@ -407,7 +428,7 @@ Deno.serve(async (req: Request) => {
           error: 'Failed to validate CSRF token'
         }), {
           status: 500,
-          headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+          headers: { ...cors, ['Content-Type']: 'application/json' },
         });
       }
 
@@ -415,13 +436,13 @@ Deno.serve(async (req: Request) => {
         valid: true,
         message: 'CSRF token validated successfully'
       }), {
-        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+        headers: { ...cors, ['Content-Type']: 'application/json' },
       });
     }
 
     return new Response(JSON.stringify({ error: 'Method not allowed - only GET and POST are supported' }), {
       status: 405,
-      headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+      headers: { ...cors, ['Content-Type']: 'application/json' },
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -432,7 +453,7 @@ Deno.serve(async (req: Request) => {
       details: IS_PRODUCTION ? undefined : errorMessage
     }), {
       status: 500,
-      headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+      headers: { ...cors, ['Content-Type']: 'application/json' },
     });
   }
 });

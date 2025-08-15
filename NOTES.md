@@ -1,59 +1,66 @@
-# CSRF Token RLS Fix - Implementation Notes
-
-## Issue
-The csrf-token edge function was throwing "new row violates row-level security policy for table csrf_tokens" because it was using the SERVICE_ROLE_KEY to bypass RLS, but the insert operation was still subject to RLS policies.
-
-## Solution
-Modified the csrf-token edge function to use the user's JWT with the anon key instead of the service role key. This ensures:
-1. The authenticated user's ID is properly recognized by RLS policies
-2. The INSERT operation satisfies the RLS policy: `auth.uid() = user_id`
-3. No service role bypass is needed, maintaining security
+# 2025-08-15 – CORS hardening for Supabase Edge Functions
 
 ## Changes Made
 
-### 1. `/supabase/functions/csrf-token/index.ts`
-- Removed SERVICE_ROLE_KEY dependency
-- Changed to use SUPABASE_URL and SUPABASE_ANON_KEY environment variables
-- Modified to create Supabase client per request with user's JWT forwarded via Authorization header
-- This ensures auth.uid() is properly set for RLS validation
+### 1. Implemented strict, allowlisted CORS for csrf-token & stripe-checkout
 
-### 2. Client-side Code
-- No changes needed - already using `supabase.functions.invoke()` which automatically forwards the user's JWT
-- The `/app/shared/security/csrf.ts` properly includes Authorization header with user's session token
+Both edge functions now implement proper CORS handling with:
+- **Exact origin echoing** from allowlist (https://iownmyfuture.ai, https://www.iownmyfuture.ai)
+- **Access-Control-Allow-Credentials: true** for credentialed requests
+- **OPTIONS preflight** returns 204 with matching headers
+- **All responses** include proper CORS headers (success and error cases)
+- **Vary: Origin** header for proper caching
 
-### 3. Deployment
-- Deployed updated csrf-token function to production
-- Function now respects RLS policies while maintaining security
+### 2. CSRF Token RLS Fix (Previous)
 
-## Technical Details
+The csrf-token edge function uses anon key + forwarded user JWT to satisfy RLS policies:
+- Uses `SUPABASE_ANON_KEY` with user's JWT instead of SERVICE_ROLE_KEY
+- Each request creates a Supabase client with forwarded Authorization header
+- This ensures `auth.uid()` properly matches `user_id` in RLS policies
+- No security degradation - RLS policies remain fully enforced
 
-### Before (causing RLS error):
+## Technical Implementation
+
+### CORS Helper Function
 ```typescript
-// Global client with service role - bypasses RLS but insert still checked
-const supabase = createClient(supabaseUrl, serviceRoleKey);
+const allowedOrigins = [
+  'https://iownmyfuture.ai',
+  'https://www.iownmyfuture.ai',
+];
+
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get('Origin') ?? '';
+  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
+    'Access-Control-Allow-Credentials': 'true',
+    'Vary': 'Origin',
+  } as const;
+}
 ```
 
-### After (RLS compliant):
-```typescript
-// Per-request client with user's JWT - respects RLS
-const supabase = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
-  global: { headers: { Authorization: authHeader } },
-});
-```
+## Production Verification
 
-## Verification
-- The csrf-token edge function now properly authenticates users
-- CSRF tokens are inserted with the authenticated user's ID
-- RLS policies are satisfied: `auth.uid() = user_id`
-- Stripe checkout flow continues to work (has requireCSRF: false currently)
+✅ Preflight OPTIONS returns 204 with exact origin, credentials allowed, headers listed, Vary: Origin
+✅ POST /functions/v1/csrf-token returns 200 with proper CORS headers
+✅ POST /functions/v1/stripe-checkout returns success with same CORS headers
+✅ No "must not be wildcard '*' when credentials is 'include'" errors
+✅ Checkout redirects to Stripe successfully
+✅ RLS remains enforced - no bypass needed
 
 ## Environment Variables Required
-Edge functions need these environment variables set in Supabase Dashboard:
+
+Edge functions need these environment variables set in Supabase Dashboard → Functions → Env Vars:
 - `SUPABASE_URL` or `PROJECT_URL`
 - `SUPABASE_ANON_KEY`
+- `STRIPE_SECRET_KEY` (for stripe-checkout)
 
 ## Security Considerations
+
+- Strict origin allowlist prevents unauthorized cross-origin requests
+- Credentials support maintained for cookie-based CSRF protection
 - RLS policies remain enforced - no bypass needed
 - Each user can only create/access their own CSRF tokens
 - Double-submit cookie pattern remains intact
-- No security degradation from the changes
