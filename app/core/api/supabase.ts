@@ -98,16 +98,14 @@ export const signOut = async () => {
 };
 
 // Stripe helpers
-export const getUserSubscription = async (userId?: string) => {
+export const getUserSubscription = async (_userId?: string) => {
   try {
-    // If userId is provided, use it. Otherwise rely on RLS
-    let query = supabase.from('subscriptions').select('*');
-    
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-    
-    const { data, error } = await query.maybeSingle();
+    // Note: userId parameter is kept for backwards compatibility but not used.
+    // The subscriptions view no longer has a user_id column - RLS now scopes results to the authenticated user.
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .maybeSingle();
     
     if (error) {
       if (error.code === 'PGRST116') {
