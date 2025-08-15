@@ -153,6 +153,99 @@ const cleanupOldTokens = async (supabaseClient: SupabaseClient, userId: string):
   }
 };
 
+// Two-step function to deactivate existing token and insert new one
+const createFreshTokenForUser = async (
+  supabaseClient: SupabaseClient,
+  userId: string,
+  tokenHash: string,
+  expiresAt: string,
+  userAgent: string,
+  ipAddress?: string
+): Promise<{ error: Error | null }> => {
+  // Build insert payload
+  const insertPayload: Record<string, string | boolean> = {
+    user_id: userId,
+    token_hash: tokenHash,
+    expires_at: expiresAt,
+    user_agent: userAgent,
+    active: true,
+    used: false,
+  };
+  
+  // Only add ip_address if it's provided
+  if (ipAddress) {
+    insertPayload.ip_address = ipAddress;
+  }
+
+  // Step 1: Deactivate any existing active token for this user
+  const { error: deactivateError } = await supabaseClient
+    .from('csrf_tokens')
+    .update({ active: false })
+    .eq('user_id', userId)
+    .eq('active', true);
+  
+  if (deactivateError) {
+    console.error('Error deactivating existing token:', deactivateError.message);
+    return { error: deactivateError };
+  }
+
+  // Step 2: Insert new active token
+  const { error: insertError } = await supabaseClient
+    .from('csrf_tokens')
+    .insert(insertPayload);
+
+  // Handle race condition: if another insert slipped in, retry once
+  if (insertError && insertError.message.includes('duplicate key value')) {
+    console.log('Duplicate key detected, retrying after deactivation...');
+    
+    // Deactivate again
+    const { error: deactivateError2 } = await supabaseClient
+      .from('csrf_tokens')
+      .update({ active: false })
+      .eq('user_id', userId)
+      .eq('active', true);
+    
+    if (deactivateError2) {
+      console.error('Error on retry deactivation:', deactivateError2.message);
+      return { error: deactivateError2 };
+    }
+
+    // Try insert again
+    const { error: insertError2 } = await supabaseClient
+      .from('csrf_tokens')
+      .insert(insertPayload);
+    
+    if (insertError2) {
+      console.error('Error on retry insert:', insertError2.message);
+      return { error: insertError2 };
+    }
+    
+    return { error: null };
+  }
+
+  if (insertError) {
+    // Handle IP address errors separately (try without IP)
+    if (insertError.message.includes('ip_address') || insertError.message.includes('inet')) {
+      delete insertPayload.ip_address;
+      
+      const { error: retryError } = await supabaseClient
+        .from('csrf_tokens')
+        .insert(insertPayload);
+      
+      if (retryError) {
+        console.error('Error inserting without IP:', retryError.message);
+        return { error: retryError };
+      }
+      return { error: null };
+    }
+    
+    console.error('Error inserting new token:', insertError.message);
+    return { error: insertError };
+  }
+
+  return { error: null };
+};
+
 Deno.serve(async (req: Request) => {
   const cors = corsHeadersFor(req);
   
@@ -199,94 +292,28 @@ Deno.serve(async (req: Request) => {
       const tokenHash = await hashToken(cookieToken);
       const expiresAt = new Date(Date.now() + COOKIE_MAX_AGE * 1000);
 
-      // Clean up old tokens for this user
+      // Clean up old expired/used tokens for this user
       await cleanupOldTokens(supabase, user.id);
 
-      // Store new token hash in database
-      try {
-        // Parse IP address from x-forwarded-for header (take first IP if comma-separated)
-        const forwardedFor = req.headers.get('x-forwarded-for') ?? '';
-        const ipAddress = forwardedFor.split(',')[0].trim();
-        
-        // Build insert payload dynamically
-        const insertPayload: Record<string, string | boolean> = {
-          user_id: user.id,
-          token_hash: tokenHash,
-          expires_at: expiresAt.toISOString(),
-          user_agent: req.headers.get('user-agent') || 'unknown',
-          used: false,
-        };
-        
-        // Only add ip_address if it's a non-empty string
-        if (ipAddress) {
-          insertPayload.ip_address = ipAddress;
-        } else {
-          // Try alternative headers if x-forwarded-for is empty
-          const realIp = req.headers.get('x-real-ip');
-          if (realIp) {
-            insertPayload.ip_address = realIp;
-          }
-        }
-        
-        try {
-          const { error: insertError } = await supabase
-            .from('csrf_tokens')
-            .insert(insertPayload);
+      // Parse IP address from headers
+      const forwardedFor = req.headers.get('x-forwarded-for') ?? '';
+      const ipAddress = forwardedFor.split(',')[0].trim() || req.headers.get('x-real-ip') || undefined;
+      const userAgent = req.headers.get('user-agent') || 'unknown';
 
-          if (insertError) {
-            // Log the error but continue if it's just an IP address issue
-            console.error('Failed to store CSRF token in database:', insertError.message);
-            
-            // If the error is related to IP address, retry without it
-            if (insertError.message.includes('ip_address') || insertError.message.includes('inet')) {
-              delete insertPayload.ip_address;
-              
-              const { error: retryError } = await supabase
-                .from('csrf_tokens')
-                .insert(insertPayload);
-              
-              if (retryError) {
-                console.error('Failed to store CSRF token even without IP:', retryError.message);
-                return new Response(JSON.stringify({ 
-                  error: retryError.message
-                }), {
-                  status: 500,
-                  headers: { ...cors, ['Content-Type']: 'application/json' },
-                });
-              }
-            } else {
-              // Non-IP related error, return error response
-              return new Response(JSON.stringify({ 
-                error: insertError.message
-              }), {
-                status: 500,
-                headers: { ...cors, ['Content-Type']: 'application/json' },
-              });
-            }
-          }
-        } catch (innerError) {
-          console.error('Error during token insertion:', innerError);
-          // Try one more time without IP address as fallback
-          delete insertPayload.ip_address;
-          
-          const { error: fallbackError } = await supabase
-            .from('csrf_tokens')
-            .insert(insertPayload);
-          
-          if (fallbackError) {
-            console.error('Final fallback failed:', fallbackError.message);
-            return new Response(JSON.stringify({ 
-              error: 'Failed to generate CSRF token'
-            }), {
-              status: 500,
-              headers: { ...cors, ['Content-Type']: 'application/json' },
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error inserting CSRF token:', error);
+      // Use two-step deactivate+insert to ensure only one active token
+      const { error: tokenError } = await createFreshTokenForUser(
+        supabase,
+        user.id,
+        tokenHash,
+        expiresAt.toISOString(),
+        userAgent,
+        ipAddress
+      );
+
+      if (tokenError) {
+        console.error('Failed to create CSRF token:', tokenError.message);
         return new Response(JSON.stringify({ 
-          error: 'Failed to generate CSRF token'
+          error: `CSRF token creation failed: ${tokenError.message}`
         }), {
           status: 500,
           headers: { ...cors, ['Content-Type']: 'application/json' },

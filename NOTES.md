@@ -1,3 +1,44 @@
+# 2025-08-15 – CSRF token upsert strategy
+
+## Latest Update - Two-Step Token Creation
+
+Replaced single insert with two-step deactivate+insert strategy:
+1. **UPDATE active=false** for any existing active token (user-scoped)
+2. **INSERT new active token** with token_hash, expires_at, active=true
+3. **Retry logic** - Single retry on duplicate key to handle race conditions
+4. **IP address fallback** - Handles IP parsing errors gracefully
+
+This ensures only one active CSRF token per user at any time, satisfying the unique partial index:
+```sql
+CREATE UNIQUE INDEX idx_csrf_tokens_user_id_active ON csrf_tokens (user_id) WHERE active = true;
+```
+
+### Technical Implementation
+
+```typescript
+// Two-step function ensures one active token per user
+async function createFreshTokenForUser(...) {
+  // Step 1: Deactivate existing active token
+  await update({ active: false }).eq('user_id', userId).eq('active', true)
+  
+  // Step 2: Insert new active token
+  await insert({ user_id, token_hash, expires_at, active: true, used: false })
+  
+  // Handle race: retry once if duplicate key
+  if (duplicateKeyError) {
+    // Deactivate again and retry insert
+  }
+}
+```
+
+### Production Verification
+- ✅ Multiple rapid clicks on "Choose Plan" return 200 with valid CSRF token
+- ✅ No duplicate key errors in production logs
+- ✅ Stripe checkout session creates successfully
+- ✅ CORS headers remain strict (allowlisted origins, credentials allowed)
+
+---
+
 # 2025-08-15 – CORS hardening for Supabase Edge Functions
 
 ## Changes Made
