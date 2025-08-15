@@ -2,9 +2,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.49.1';
 
 // Validate required environment variables
-const PROJECT_URL = Deno.env.get('PROJECT_URL');
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || Deno.env.get('PROJECT_URL');
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
-const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY');
 
 // Use production URL as fallback if SITE_URL not configured
 const SITE_URL = Deno.env.get('SITE_URL') || 'https://iownmyfuture.ai';
@@ -19,8 +18,8 @@ const corsHeaders = {
 } as const;
 
 // Check if environment variables are present
-if (!PROJECT_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
-  console.error('Missing PROJECT_URL, SUPABASE_ANON_KEY, or SERVICE_ROLE_KEY');
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
   Deno.serve(() => {
     return new Response(JSON.stringify({ 
       error: 'Configuration error' 
@@ -32,11 +31,6 @@ if (!PROJECT_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
   // Exit early to prevent further execution
   Deno.exit(1);
 }
-
-// Initialize Supabase client with service role key for bypassing RLS
-const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
-const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 // Cookie configuration
 const COOKIE_NAME = 'csrf_token';
@@ -147,17 +141,29 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Verify authentication
-    const authToken = req.headers.get('authorization')?.replace('Bearer ', '');
-    if (!authToken) {
+    // Get the Authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized: No authentication token provided' }), {
         status: 401,
         headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
       });
     }
 
-    // Use service role client for auth verification
-    const { data: { user }, error: authError } = await supabase.auth.getUser(authToken);
+    // Create Supabase client with user's JWT for RLS compliance
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      return new Response(JSON.stringify({ error: 'Configuration error' }), {
+        status: 500,
+        headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
+      });
+    }
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Verify authentication
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       console.error('Authentication error:', authError);
       return new Response(JSON.stringify({ error: 'Invalid authentication token' }), {
@@ -165,8 +171,6 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, ['Content-Type']: 'application/json' },
       });
     }
-
-    // No need for user-authenticated client - we use service role key to bypass RLS
 
     if (req.method === 'GET') {
       // Generate new CSRF tokens
