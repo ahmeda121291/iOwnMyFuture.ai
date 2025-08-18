@@ -26,7 +26,7 @@ export default function UpgradePage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
-  const [preselectedPriceId, setPreselectedPriceId] = useState<string | null>(null);
+  const [_preselectedPriceId, setPreselectedPriceId] = useState<string | null>(null);
   const { prices, loading: pricesLoading, error: pricesError, formatPrice, getSavings } = useStripePrices();
 
   const checkAccess = useCallback(async () => {
@@ -56,7 +56,7 @@ export default function UpgradePage() {
         return;
       }
     } catch (error) {
-      // Error checking access is expected in some cases
+      console.error('Error checking access:', error);
     } finally {
       setCheckingSubscription(false);
     }
@@ -93,11 +93,11 @@ export default function UpgradePage() {
 
   const handleUpgrade = async (priceId: string) => {
     // Dev logging
-    // Starting checkout with: 
-      priceId, 
-      userId: user?.id, 
+    console.log('[Upgrade] Starting checkout with:', {
+      priceId,
+      userId: user?.id,
       email: user?.email,
-      origin: window.location.origin 
+      origin: window.location.origin
     });
 
     if (!user) {
@@ -124,7 +124,7 @@ export default function UpgradePage() {
       };
 
       // Dev logging
-      // Creating checkout session with params
+      console.log('[Upgrade] Creating checkout session with params:', checkoutParams);
 
       // Update loading message
       toast.loading('Connecting to payment processor...', { id: loadingToast });
@@ -137,20 +137,20 @@ export default function UpgradePage() {
       toast.success('Redirecting to checkout...');
     } catch (error) {
       // Log full error details
-      // Full checkout error - already handled with toast
+      console.error('[Upgrade] Full checkout error:', error);
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
       // Check for specific error types
       if (errorMessage.includes('CSRF')) {
-        // CSRF token error - may need to refresh page
+        console.error('[Upgrade] CSRF token error - may need to refresh page');
         toast.error('Session expired. Please refresh the page and try again.');
       } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('authenticated')) {
-        // Authentication error
+        console.error('[Upgrade] Authentication error');
         toast.error('Please log in again to continue');
         navigate('/auth');
       } else if (errorMessage.includes('price')) {
-        // Price ID error
+        console.error('[Upgrade] Price ID error:', priceId);
         toast.error('Invalid pricing plan. Please contact support.');
       } else {
         toast.error(`Failed to start checkout: ${errorMessage}`);
@@ -264,7 +264,7 @@ export default function UpgradePage() {
 
             <Button
               onClick={() => {
-                // Monthly plan button clicked
+                console.log('[Upgrade] Monthly plan button clicked');
                 if (MONTHLY_PRICE_ID) {
                   handleUpgrade(MONTHLY_PRICE_ID);
                 } else {
@@ -332,7 +332,7 @@ export default function UpgradePage() {
 
             <Button
               onClick={() => {
-                // Annual plan button clicked
+                console.log('[Upgrade] Annual plan button clicked');
                 if (YEARLY_PRICE_ID) {
                   handleUpgrade(YEARLY_PRICE_ID);
                 } else {
