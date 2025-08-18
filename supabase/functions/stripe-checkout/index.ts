@@ -190,46 +190,96 @@ Deno.serve(async (req) => {
       // eslint-disable-next-line no-console
       console.log(`[stripe-checkout] Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
 
-      const { error: createCustomerError } = await supabase.from('stripe_customers').insert({
-        user_id: user.id,
-        customer_id: newCustomer.id,
-      });
+      // Use upsert with onConflict to handle race conditions and duplicates
+      const { error: upsertError } = await supabase
+        .from('stripe_customers')
+        .upsert(
+          { user_id: user.id, customer_id: newCustomer.id },
+          { onConflict: 'user_id' }
+        );
 
-      if (createCustomerError) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to save customer information in the database', createCustomerError);
-        try {
-          await stripe.customers.del(newCustomer.id);
-          await supabase.from('stripe_subscriptions').delete().eq('customer_id', newCustomer.id);
-        } catch (deleteError) {
+      if (upsertError) {
+        // Check if it's a duplicate key error
+        if (upsertError.message && upsertError.message.includes('duplicate key value')) {
           // eslint-disable-next-line no-console
-          console.error('Failed to clean up after customer mapping error:', deleteError);
+          console.log('[stripe-checkout] Duplicate key detected, fetching existing customer mapping');
+          
+          // Fetch the existing customer mapping
+          const { data: existingCustomer, error: fetchError } = await supabase
+            .from('stripe_customers')
+            .select('customer_id')
+            .eq('user_id', user.id)
+            .is('deleted_at', null)
+            .maybeSingle();
+          
+          if (fetchError || !existingCustomer) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to fetch existing customer after duplicate key error', fetchError);
+            try {
+              await stripe.customers.del(newCustomer.id);
+            } catch (deleteError) {
+              // eslint-disable-next-line no-console
+              console.error('Failed to delete Stripe customer after error:', deleteError);
+            }
+            return corsResponse(req, { error: 'Failed to resolve customer mapping conflict' }, 500);
+          }
+          
+          // Use the existing customer ID instead
+          customerId = existingCustomer.customer_id;
+          // eslint-disable-next-line no-console
+          console.log(`[stripe-checkout] Using existing customer ${customerId} for user ${user.id}`);
+          
+          // Clean up the newly created Stripe customer since we're using the existing one
+          try {
+            await stripe.customers.del(newCustomer.id);
+            // eslint-disable-next-line no-console
+            console.log(`[stripe-checkout] Cleaned up duplicate Stripe customer ${newCustomer.id}`);
+          } catch (deleteError) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to delete duplicate Stripe customer:', deleteError);
+          }
+        } else {
+          // Other database error - not a duplicate
+          // eslint-disable-next-line no-console
+          console.error('[stripe-checkout] Failed to upsert stripe_customers:', upsertError.message);
+          try {
+            await stripe.customers.del(newCustomer.id);
+            await supabase.from('stripe_subscriptions').delete().eq('customer_id', newCustomer.id);
+          } catch (deleteError) {
+            // eslint-disable-next-line no-console
+            console.error('Failed to clean up after customer mapping error:', deleteError);
+          }
+          return corsResponse(req, { error: 'Failed to create customer mapping' }, 500);
         }
-        return corsResponse(req, { error: 'Failed to create customer mapping' }, 500);
+      } else {
+        // Upsert succeeded - use the new customer ID
+        customerId = newCustomer.id;
       }
 
       if (mode === 'subscription') {
         const { error: createSubscriptionError } = await supabase.from('stripe_subscriptions').insert({
-          customer_id: newCustomer.id,
+          customer_id: customerId,
           status: 'not_started',
         });
 
         if (createSubscriptionError) {
           // eslint-disable-next-line no-console
           console.error('Failed to save subscription in the database', createSubscriptionError);
-          try {
-            await stripe.customers.del(newCustomer.id);
-          } catch (deleteError) {
-            // eslint-disable-next-line no-console
-            console.error('Failed to delete Stripe customer after subscription creation error:', deleteError);
+          // Only delete the Stripe customer if we created a new one (not reusing existing)
+          if (customerId === newCustomer.id) {
+            try {
+              await stripe.customers.del(newCustomer.id);
+            } catch (deleteError) {
+              // eslint-disable-next-line no-console
+              console.error('Failed to delete Stripe customer after subscription creation error:', deleteError);
+            }
           }
           return corsResponse(req, { error: 'Unable to save the subscription in the database' }, 500);
         }
       }
 
-      customerId = newCustomer.id;
       // eslint-disable-next-line no-console
-      console.log(`Successfully set up new customer ${customerId} with subscription record`);
+      console.log(`Successfully set up customer ${customerId} with subscription record`);
     } else {
       customerId = customer.customer_id;
 
