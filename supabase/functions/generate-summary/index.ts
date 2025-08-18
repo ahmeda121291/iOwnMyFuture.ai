@@ -251,14 +251,20 @@ const makeOpenAIRequest = async (messages: Array<{ role: string; content: string
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'OpenAI API request failed');
+      // Log detailed error for debugging
+      console.error('OpenAI API Error - Status:', response.status);
+      console.error('OpenAI API Error - Details:', errorData);
+      // Return generic error to client
+      throw new Error('An internal error occurred while generating content');
     }
 
     const data: OpenAIResponse = await response.json();
     return data.choices[0]?.message?.content || '';
   } catch (error) {
+    // Log detailed error for debugging
     console.error('OpenAI API Error:', error);
-    throw error;
+    // Throw generic error to client
+    throw new Error('An internal error occurred while generating content');
   }
 };
 
@@ -432,7 +438,15 @@ Deno.serve(async (req: Request) => {
       }
 
       console.error('Error in generate-summary function:', error);
-      return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
+      // Check if this is our generic OpenAI error
+      if (error instanceof Error && error.message === 'An internal error occurred while generating content') {
+        return new Response(JSON.stringify({ error: 'An internal error occurred while generating content' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      // For other errors, still return a generic message to the client
+      return new Response(JSON.stringify({ error: 'An internal error occurred' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
