@@ -180,80 +180,118 @@ Deno.serve(async (req) => {
       return corsResponse(req, { error: `Invalid or inaccessible price ID: ${priceError.message}` }, 400);
     }
 
-    // Create Stripe customer mapping if none exists
+    // Check for existing customer mapping FIRST before creating new Stripe customer
     if (!customer || !customer.customer_id) {
-      const newCustomer = await stripe.customers.create({
-        email: user.email,
-        metadata: { userId: user.id },
-      });
-
       // eslint-disable-next-line no-console
-      console.log(`[stripe-checkout] Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
-
-      // Use upsert with onConflict to handle race conditions and duplicates
-      const { error: upsertError } = await supabase
+      console.log(`[stripe-checkout] No existing customer found for user ${user.id}, checking again...`);
+      
+      // Double-check for existing customer to avoid race conditions
+      const { data: existingCustomer, error: existingErr } = await supabase
         .from('stripe_customers')
-        .upsert(
-          { user_id: user.id, customer_id: newCustomer.id },
-          { onConflict: 'user_id' }
-        );
+        .select('customer_id')
+        .eq('user_id', user.id)
+        .is('deleted_at', null)
+        .maybeSingle();
+      
+      if (existingErr) {
+        // eslint-disable-next-line no-console
+        console.error('[stripe-checkout] Error checking for existing customer:', existingErr.message);
+      }
+      
+      if (existingCustomer?.customer_id) {
+        // Found existing mapping - use it
+        customerId = existingCustomer.customer_id;
+        // eslint-disable-next-line no-console
+        console.log(`[stripe-checkout] Found existing customer ${customerId} on second check for user ${user.id}`);
+      } else {
+        // No existing mapping found - create new Stripe customer
+        // eslint-disable-next-line no-console
+        console.log(`[stripe-checkout] Creating new Stripe customer for user ${user.id}`);
+        
+        const newCustomer = await stripe.customers.create({
+          email: user.email,
+          metadata: { userId: user.id },
+        });
 
-      if (upsertError) {
-        // Check if it's a duplicate key error
-        if (upsertError.message && upsertError.message.includes('duplicate key value')) {
+        // eslint-disable-next-line no-console
+        console.log(`[stripe-checkout] Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
+
+        // Upsert the new mapping with user_id as conflict target
+        const { error: upsertError } = await supabase
+          .from('stripe_customers')
+          .upsert(
+            { user_id: user.id, customer_id: newCustomer.id },
+            { onConflict: 'user_id' }
+          );
+
+        if (upsertError) {
           // eslint-disable-next-line no-console
-          console.log('[stripe-checkout] Duplicate key detected, fetching existing customer mapping');
+          console.error('[stripe-checkout] Upsert error details:', {
+            message: upsertError.message,
+            code: upsertError.code,
+            details: upsertError.details,
+            hint: upsertError.hint
+          });
           
-          // Fetch the existing customer mapping
-          const { data: existingCustomer, error: fetchError } = await supabase
-            .from('stripe_customers')
-            .select('customer_id')
-            .eq('user_id', user.id)
-            .is('deleted_at', null)
-            .maybeSingle();
-          
-          if (fetchError || !existingCustomer) {
+          if (upsertError.message.includes('duplicate key value')) {
+            // Another request beat us - fetch the existing customer mapping
             // eslint-disable-next-line no-console
-            console.error('Failed to fetch existing customer after duplicate key error', fetchError);
+            console.log('[stripe-checkout] Race condition detected - another request created the mapping first');
+            
+            const { data: racingCustomer, error: raceFetchErr } = await supabase
+              .from('stripe_customers')
+              .select('customer_id')
+              .eq('user_id', user.id)
+              .is('deleted_at', null)
+              .maybeSingle();
+            
+            if (raceFetchErr) {
+              // eslint-disable-next-line no-console
+              console.error('[stripe-checkout] Failed to fetch racing customer:', raceFetchErr.message);
+            }
+            
+            if (racingCustomer?.customer_id) {
+              customerId = racingCustomer.customer_id;
+              // eslint-disable-next-line no-console
+              console.log(`[stripe-checkout] Using racing customer ${customerId} for user ${user.id}`);
+              
+              // Clean up our newly-created Stripe customer since we won't use it
+              try {
+                await stripe.customers.del(newCustomer.id);
+                // eslint-disable-next-line no-console
+                console.log(`[stripe-checkout] Cleaned up unused Stripe customer ${newCustomer.id}`);
+              } catch (deleteErr) {
+                // eslint-disable-next-line no-console
+                console.error('[stripe-checkout] Failed to delete unused Stripe customer:', deleteErr);
+              }
+            } else {
+              // Couldn't fetch the racing customer - use our new one
+              customerId = newCustomer.id;
+              // eslint-disable-next-line no-console
+              console.log(`[stripe-checkout] Could not fetch racing customer, using our new one: ${customerId}`);
+            }
+          } else {
+            // Unexpected database error - clean up and fail
+            // eslint-disable-next-line no-console
+            console.error('[stripe-checkout] Unexpected DB error during upsert:', upsertError.message);
+            
             try {
               await stripe.customers.del(newCustomer.id);
-            } catch (deleteError) {
               // eslint-disable-next-line no-console
-              console.error('Failed to delete Stripe customer after error:', deleteError);
+              console.log(`[stripe-checkout] Cleaned up Stripe customer ${newCustomer.id} after DB error`);
+            } catch (deleteErr) {
+              // eslint-disable-next-line no-console
+              console.error('[stripe-checkout] Failed to delete Stripe customer after DB error:', deleteErr);
             }
-            return corsResponse(req, { error: 'Failed to resolve customer mapping conflict' }, 500);
-          }
-          
-          // Use the existing customer ID instead
-          customerId = existingCustomer.customer_id;
-          // eslint-disable-next-line no-console
-          console.log(`[stripe-checkout] Using existing customer ${customerId} for user ${user.id}`);
-          
-          // Clean up the newly created Stripe customer since we're using the existing one
-          try {
-            await stripe.customers.del(newCustomer.id);
-            // eslint-disable-next-line no-console
-            console.log(`[stripe-checkout] Cleaned up duplicate Stripe customer ${newCustomer.id}`);
-          } catch (deleteError) {
-            // eslint-disable-next-line no-console
-            console.error('Failed to delete duplicate Stripe customer:', deleteError);
+            
+            return corsResponse(req, { error: 'Failed to create customer mapping' }, 500);
           }
         } else {
-          // Other database error - not a duplicate
+          // Upsert succeeded - use the new customer ID
+          customerId = newCustomer.id;
           // eslint-disable-next-line no-console
-          console.error('[stripe-checkout] Failed to upsert stripe_customers:', upsertError.message);
-          try {
-            await stripe.customers.del(newCustomer.id);
-            await supabase.from('stripe_subscriptions').delete().eq('customer_id', newCustomer.id);
-          } catch (deleteError) {
-            // eslint-disable-next-line no-console
-            console.error('Failed to clean up after customer mapping error:', deleteError);
-          }
-          return corsResponse(req, { error: 'Failed to create customer mapping' }, 500);
+          console.log(`[stripe-checkout] Successfully created customer mapping for ${customerId}`);
         }
-      } else {
-        // Upsert succeeded - use the new customer ID
-        customerId = newCustomer.id;
       }
 
       if (mode === 'subscription') {
