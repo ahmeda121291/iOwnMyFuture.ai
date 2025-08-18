@@ -4,41 +4,18 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { z } from 'npm:zod@3.25.76';
 import { authenticateAndValidateCSRF } from '../_shared/csrf-middleware.ts';
 import type { AuthenticatedUser } from '../_shared/csrf-middleware.ts';
-
-// Read environment variables from the Edge Function secrets
-const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
+import { 
+  SUPABASE_URL as supabaseUrl,
+  SERVICE_ROLE_KEY as serviceRoleKey,
+  STRIPE_SECRET_KEY as stripeSecret,
+  getCorsHeaders 
+} from '../_shared/config.ts';
 
 // Initialize clients
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 const stripe = new Stripe(stripeSecret, {
   appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
 });
-
-// Allowed origins for CORS
-const allowedOrigins = [
-  'https://iownmyfuture.ai',
-  'https://www.iownmyfuture.ai',
-];
-
-// CORS helper function
-function corsHeadersFor(req: Request) {
-  const origin = req.headers.get('Origin') ?? '';
-  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  return {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Origin': allowOrigin,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Credentials': 'true',
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Vary': 'Origin',
-  } as const;
-}
 
 // Zod schema for request validation
 const CheckoutRequestSchema = z.object({
@@ -51,7 +28,7 @@ const CheckoutRequestSchema = z.object({
 
 // Helper to build CORS responses
 function corsResponse(req: Request, body: string | object | null, status = 200) {
-  const cors = corsHeadersFor(req);
+  const cors = getCorsHeaders(req);
   
   if (status === 204) {
     return new Response(null, { status, headers: cors });
@@ -64,7 +41,7 @@ function corsResponse(req: Request, body: string | object | null, status = 200) 
 }
 
 Deno.serve(async (req) => {
-  const cors = corsHeadersFor(req);
+  const cors = getCorsHeaders(req);
   
   // eslint-disable-next-line no-console
   console.log('[stripe-checkout] Request received:', {

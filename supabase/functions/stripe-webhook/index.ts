@@ -1,12 +1,12 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
-
-// Load secrets from environment
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
-const stripeWebhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '';
-const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
+import { 
+  STRIPE_SECRET_KEY as stripeSecret,
+  STRIPE_WEBHOOK_SECRET as stripeWebhookSecret,
+  SUPABASE_URL as supabaseUrl,
+  SERVICE_ROLE_KEY as serviceRoleKey
+} from '../_shared/config.ts';
 
 // Initialize clients
 const stripe = new Stripe(stripeSecret, {

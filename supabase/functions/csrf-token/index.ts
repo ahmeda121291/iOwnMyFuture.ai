@@ -1,44 +1,18 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.49.1';
-
-// Validate required environment variables
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || Deno.env.get('PROJECT_URL');
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
-
-// Use production URL as fallback if SITE_URL not configured
-const SITE_URL = Deno.env.get('SITE_URL') || 'https://iownmyfuture.ai';
-const ENVIRONMENT = Deno.env.get('ENVIRONMENT') || 'development';
-const IS_PRODUCTION = ENVIRONMENT === 'production';
-
-// Allowed origins for CORS
-const allowedOrigins = [
-  'https://iownmyfuture.ai',
-  'https://www.iownmyfuture.ai',
-];
-
-// CORS helper function
-function corsHeadersFor(req: Request) {
-  const origin = req.headers.get('Origin') ?? '';
-  const allowOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-  return {
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Origin': allowOrigin,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-csrf-token',
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Access-Control-Allow-Credentials': 'true',
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    'Vary': 'Origin',
-  } as const;
-}
+import { 
+  SUPABASE_URL, 
+  SUPABASE_ANON_KEY, 
+  SITE_URL, 
+  IS_PRODUCTION, 
+  getCorsHeaders 
+} from '../_shared/config.ts';
 
 // Check if environment variables are present
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_ANON_KEY');
   Deno.serve((req) => {
-    const cors = corsHeadersFor(req);
+    const cors = getCorsHeaders(req);
     return new Response(JSON.stringify({ 
       error: 'Configuration error' 
     }), {
@@ -255,7 +229,7 @@ const createFreshTokenForUser = async (
 };
 
 Deno.serve(async (req: Request) => {
-  const cors = corsHeadersFor(req);
+  const cors = getCorsHeaders(req);
   
   if (req.method === 'OPTIONS') {
     // Preflight request

@@ -1,20 +1,12 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
-
-// Get the site URL from environment or use production URL as fallback
-const siteUrl = Deno.env.get('SITE_URL') || 'https://iownmyfuture.ai';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': siteUrl,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Credentials': 'true',
-};
-
-const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
-const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
+import { 
+  SUPABASE_URL as supabaseUrl,
+  SERVICE_ROLE_KEY as serviceRoleKey,
+  STRIPE_SECRET_KEY as stripeSecret,
+  getCorsHeaders
+} from '../_shared/config.ts';
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 const stripe = new Stripe(stripeSecret, {
@@ -26,8 +18,10 @@ const MONTHLY_PRODUCT_ID = 'prod_SlmIZrU6E29IYr';
 const YEARLY_PRODUCT_ID = 'prod_SlmIrtY1LuVNsA';
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   if (req.method !== 'GET') {

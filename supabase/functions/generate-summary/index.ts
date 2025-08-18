@@ -1,15 +1,12 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { z } from 'npm:zod@3.25.76';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const openaiApiKey = Deno.env.get('OPENAI_API_KEY') ?? '';
-const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
+import { 
+  SUPABASE_URL as supabaseUrl,
+  SERVICE_ROLE_KEY as serviceRoleKey,
+  OPENAI_API_KEY as openaiApiKey,
+  getCorsHeaders 
+} from '../_shared/config.ts';
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -175,9 +172,10 @@ const sanitizeInput = (input: string): string => {
 
 const checkRateLimit = async (userId: string): Promise<boolean> => {
   // Simple rate limiting: max 50 requests per hour per user
+  // TODO: Replace with Redis or Supabase's rate-limit extension for production scale
+  // Current implementation uses database storage which may not scale well under high load
   try {
-    // In a real implementation, you'd use Redis or a similar store
-    // For now, we'll use a simple in-memory approach with Supabase storage
+    // For now, we'll use a simple database approach with Supabase storage
     const { data: rateLimitData } = await supabase
       .from('user_rate_limits')
       .select('request_count, last_reset')
@@ -269,8 +267,10 @@ const makeOpenAIRequest = async (messages: Array<{ role: string; content: string
 };
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {

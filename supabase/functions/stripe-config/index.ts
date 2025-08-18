@@ -1,21 +1,19 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-};
-
-const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
-const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
-const stripePublishableKey = Deno.env.get('STRIPE_PUBLISHABLE_KEY') ?? '';
+import { 
+  SUPABASE_URL as supabaseUrl,
+  SERVICE_ROLE_KEY as serviceRoleKey,
+  STRIPE_PUBLISHABLE_KEY as stripePublishableKey,
+  getCorsHeaders
+} from '../_shared/config.ts';
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+  
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   if (req.method !== 'GET') {
