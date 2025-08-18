@@ -153,7 +153,8 @@ const cleanupOldTokens = async (supabaseClient: SupabaseClient, userId: string):
   }
 };
 
-// Two-step function to deactivate existing token and insert new one
+// Two-step function to mark existing unused tokens as used and insert new one
+// The database enforces one unused token per user via unique index: (user_id) WHERE used = FALSE AND expires_at > NOW()
 const createFreshTokenForUser = async (
   supabaseClient: SupabaseClient,
   userId: string,
@@ -162,13 +163,12 @@ const createFreshTokenForUser = async (
   userAgent: string,
   ipAddress?: string
 ): Promise<{ error: Error | null }> => {
-  // Build insert payload
+  // Build insert payload - explicitly set used: false, no active property
   const insertPayload: Record<string, string | boolean> = {
     user_id: userId,
     token_hash: tokenHash,
     expires_at: expiresAt,
     user_agent: userAgent,
-    active: true,
     used: false,
   };
   
@@ -177,37 +177,45 @@ const createFreshTokenForUser = async (
     insertPayload.ip_address = ipAddress;
   }
 
-  // Step 1: Deactivate any existing active token for this user
-  const { error: deactivateError } = await supabaseClient
+  // Step 1: Mark any existing unused tokens for this user as used
+  // This ensures we don't violate the unique constraint on (user_id) WHERE used = FALSE
+  const nowIso = new Date().toISOString();
+  const { error: markUsedError } = await supabaseClient
     .from('csrf_tokens')
-    .update({ active: false })
+    .update({ 
+      used: true, 
+      used_at: nowIso 
+    })
     .eq('user_id', userId)
-    .eq('active', true);
+    .eq('used', false);
   
-  if (deactivateError) {
-    console.error('Error deactivating existing token:', deactivateError.message);
-    return { error: deactivateError };
+  if (markUsedError) {
+    console.error('Error marking existing tokens as used:', markUsedError.message);
+    return { error: markUsedError };
   }
 
-  // Step 2: Insert new active token
+  // Step 2: Insert new unused token
   const { error: insertError } = await supabaseClient
     .from('csrf_tokens')
     .insert(insertPayload);
 
   // Handle race condition: if another insert slipped in, retry once
   if (insertError && insertError.message.includes('duplicate key value')) {
-    console.log('Duplicate key detected, retrying after deactivation...');
+    console.log('Duplicate key detected, retrying after marking tokens as used...');
     
-    // Deactivate again
-    const { error: deactivateError2 } = await supabaseClient
+    // Mark unused tokens as used again
+    const { error: markUsedError2 } = await supabaseClient
       .from('csrf_tokens')
-      .update({ active: false })
+      .update({ 
+        used: true, 
+        used_at: nowIso 
+      })
       .eq('user_id', userId)
-      .eq('active', true);
+      .eq('used', false);
     
-    if (deactivateError2) {
-      console.error('Error on retry deactivation:', deactivateError2.message);
-      return { error: deactivateError2 };
+    if (markUsedError2) {
+      console.error('Error on retry marking as used:', markUsedError2.message);
+      return { error: markUsedError2 };
     }
 
     // Try insert again
@@ -300,7 +308,7 @@ Deno.serve(async (req: Request) => {
       const ipAddress = forwardedFor.split(',')[0].trim() || req.headers.get('x-real-ip') || undefined;
       const userAgent = req.headers.get('user-agent') || 'unknown';
 
-      // Use two-step deactivate+insert to ensure only one active token
+      // Use two-step mark used+insert to ensure only one unused token
       const { error: tokenError } = await createFreshTokenForUser(
         supabase,
         user.id,
