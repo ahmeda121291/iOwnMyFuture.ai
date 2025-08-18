@@ -118,20 +118,8 @@ Deno.serve(async (req) => {
     // eslint-disable-next-line no-console
     console.log(`[stripe-checkout] Processing request for user: ${user.email}`);
 
-    const { data: customer, error: getCustomerError } = await supabase
-      .from('stripe_customers')
-      .select('customer_id')
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (getCustomerError) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to fetch customer information from the database', getCustomerError);
-      return corsResponse(req, { error: 'Failed to fetch customer information' }, 500);
-    }
-
-    let customerId: string;
+    // Use Stripe API directly instead of database table
+    let customerId: string | null = null;
 
     // CRITICAL: Validate price_id exists and is active
     try {
@@ -180,121 +168,63 @@ Deno.serve(async (req) => {
       return corsResponse(req, { error: `Invalid or inaccessible price ID: ${priceError.message}` }, 400);
     }
 
-    // Check for existing customer mapping FIRST before creating new Stripe customer
-    if (!customer || !customer.customer_id) {
+    // Try to find an existing customer via Stripe using a search by email
+    // eslint-disable-next-line no-console
+    console.log(`[stripe-checkout] Searching for existing Stripe customer with email: ${user.email}`);
+    
+    const existingCustomers = await stripe.customers.list({
+      email: user.email,
+      limit: 1,
+    });
+
+    if (existingCustomers.data.length > 0) {
+      customerId = existingCustomers.data[0].id;
       // eslint-disable-next-line no-console
-      console.log(`[stripe-checkout] No existing customer found for user ${user.id}, checking again...`);
+      console.log(`[stripe-checkout] Found existing Stripe customer: ${customerId} for user ${user.id}`);
       
-      // Double-check for existing customer to avoid race conditions
-      const { data: existingCustomer, error: existingErr } = await supabase
-        .from('stripe_customers')
-        .select('customer_id')
-        .eq('user_id', user.id)
-        .is('deleted_at', null)
-        .maybeSingle();
-      
-      if (existingErr) {
+      // Update metadata if needed to ensure supabase_user_id is set
+      const existingCustomer = existingCustomers.data[0];
+      if (!existingCustomer.metadata?.supabase_user_id) {
         // eslint-disable-next-line no-console
-        console.error('[stripe-checkout] Error checking for existing customer:', existingErr.message);
-      }
-      
-      if (existingCustomer?.customer_id) {
-        // Found existing mapping - use it
-        customerId = existingCustomer.customer_id;
-        // eslint-disable-next-line no-console
-        console.log(`[stripe-checkout] Found existing customer ${customerId} on second check for user ${user.id}`);
-      } else {
-        // No existing mapping found - create new Stripe customer
-        // eslint-disable-next-line no-console
-        console.log(`[stripe-checkout] Creating new Stripe customer for user ${user.id}`);
-        
-        const newCustomer = await stripe.customers.create({
-          email: user.email,
-          metadata: { userId: user.id },
+        console.log(`[stripe-checkout] Updating customer ${customerId} metadata with supabase_user_id`);
+        await stripe.customers.update(customerId, {
+          metadata: { supabase_user_id: user.id },
         });
-
-        // eslint-disable-next-line no-console
-        console.log(`[stripe-checkout] Created new Stripe customer ${newCustomer.id} for user ${user.id}`);
-
-        // Upsert the new mapping with user_id as conflict target
-        const { error: upsertError } = await supabase
-          .from('stripe_customers')
-          .upsert(
-            { user_id: user.id, customer_id: newCustomer.id },
-            { onConflict: 'user_id' }
-          );
-
-        if (upsertError) {
-          // eslint-disable-next-line no-console
-          console.error('[stripe-checkout] Upsert error details:', {
-            message: upsertError.message,
-            code: upsertError.code,
-            details: upsertError.details,
-            hint: upsertError.hint
-          });
-          
-          if (upsertError.message.includes('duplicate key value')) {
-            // Another request beat us - fetch the existing customer mapping
-            // eslint-disable-next-line no-console
-            console.log('[stripe-checkout] Race condition detected - another request created the mapping first');
-            
-            const { data: racingCustomer, error: raceFetchErr } = await supabase
-              .from('stripe_customers')
-              .select('customer_id')
-              .eq('user_id', user.id)
-              .is('deleted_at', null)
-              .maybeSingle();
-            
-            if (raceFetchErr) {
-              // eslint-disable-next-line no-console
-              console.error('[stripe-checkout] Failed to fetch racing customer:', raceFetchErr.message);
-            }
-            
-            if (racingCustomer?.customer_id) {
-              customerId = racingCustomer.customer_id;
-              // eslint-disable-next-line no-console
-              console.log(`[stripe-checkout] Using racing customer ${customerId} for user ${user.id}`);
-              
-              // Clean up our newly-created Stripe customer since we won't use it
-              try {
-                await stripe.customers.del(newCustomer.id);
-                // eslint-disable-next-line no-console
-                console.log(`[stripe-checkout] Cleaned up unused Stripe customer ${newCustomer.id}`);
-              } catch (deleteErr) {
-                // eslint-disable-next-line no-console
-                console.error('[stripe-checkout] Failed to delete unused Stripe customer:', deleteErr);
-              }
-            } else {
-              // Couldn't fetch the racing customer - use our new one
-              customerId = newCustomer.id;
-              // eslint-disable-next-line no-console
-              console.log(`[stripe-checkout] Could not fetch racing customer, using our new one: ${customerId}`);
-            }
-          } else {
-            // Unexpected database error - clean up and fail
-            // eslint-disable-next-line no-console
-            console.error('[stripe-checkout] Unexpected DB error during upsert:', upsertError.message);
-            
-            try {
-              await stripe.customers.del(newCustomer.id);
-              // eslint-disable-next-line no-console
-              console.log(`[stripe-checkout] Cleaned up Stripe customer ${newCustomer.id} after DB error`);
-            } catch (deleteErr) {
-              // eslint-disable-next-line no-console
-              console.error('[stripe-checkout] Failed to delete Stripe customer after DB error:', deleteErr);
-            }
-            
-            return corsResponse(req, { error: 'Failed to create customer mapping' }, 500);
-          }
-        } else {
-          // Upsert succeeded - use the new customer ID
-          customerId = newCustomer.id;
-          // eslint-disable-next-line no-console
-          console.log(`[stripe-checkout] Successfully created customer mapping for ${customerId}`);
-        }
       }
+    } else {
+      // eslint-disable-next-line no-console
+      console.log(`[stripe-checkout] No existing customer found, creating new Stripe customer for user ${user.id}`);
+      
+      const newCustomer = await stripe.customers.create({
+        email: user.email,
+        metadata: { supabase_user_id: user.id },
+      });
+      
+      customerId = newCustomer.id;
+      // eslint-disable-next-line no-console
+      console.log(`[stripe-checkout] Created new Stripe customer: ${customerId} with metadata supabase_user_id: ${user.id}`);
+    }
 
-      if (mode === 'subscription') {
+    // Handle subscription tracking if needed
+    if (mode === 'subscription' && customerId) {
+      // Check if we have a subscription record (optional - can be removed if not needed)
+      const { data: subscription, error: getSubscriptionError } = await supabase
+        .from('stripe_subscriptions')
+        .select('status')
+        .eq('customer_id', customerId)
+        .maybeSingle();
+
+      if (getSubscriptionError) {
+        // eslint-disable-next-line no-console
+        console.warn('[stripe-checkout] Could not check subscription status:', getSubscriptionError.message);
+        // Continue anyway - don't block checkout
+      } else if (subscription?.status === 'active' || subscription?.status === 'trialing') {
+        // Prevent creating a new subscription if one is already active
+        // eslint-disable-next-line no-console
+        console.error(`User ${user.id} attempted to create subscription while having active status: ${subscription.status}`);
+        return corsResponse(req, { error: 'Active subscription already exists' }, 400);
+      } else if (!subscription) {
+        // Optionally create subscription record (can be handled by webhook instead)
         const { error: createSubscriptionError } = await supabase.from('stripe_subscriptions').insert({
           customer_id: customerId,
           status: 'not_started',
@@ -302,72 +232,30 @@ Deno.serve(async (req) => {
 
         if (createSubscriptionError) {
           // eslint-disable-next-line no-console
-          console.error('Failed to save subscription in the database', createSubscriptionError);
-          // Only delete the Stripe customer if we created a new one (not reusing existing)
-          if (customerId === newCustomer.id) {
-            try {
-              await stripe.customers.del(newCustomer.id);
-            } catch (deleteError) {
-              // eslint-disable-next-line no-console
-              console.error('Failed to delete Stripe customer after subscription creation error:', deleteError);
-            }
-          }
-          return corsResponse(req, { error: 'Unable to save the subscription in the database' }, 500);
-        }
-      }
-
-      // eslint-disable-next-line no-console
-      console.log(`Successfully set up customer ${customerId} with subscription record`);
-    } else {
-      customerId = customer.customer_id;
-
-      if (mode === 'subscription') {
-        // Verify subscription exists for existing customer
-        const { data: subscription, error: getSubscriptionError } = await supabase
-          .from('stripe_subscriptions')
-          .select('status')
-          .eq('customer_id', customerId)
-          .maybeSingle();
-
-        if (getSubscriptionError) {
-          // eslint-disable-next-line no-console
-          console.error('Failed to fetch subscription information from the database', getSubscriptionError);
-          return corsResponse(req, { error: 'Failed to fetch subscription information' }, 500);
-        }
-
-        if (!subscription) {
-          // Create subscription record for existing customer if missing
-          const { error: createSubscriptionError } = await supabase.from('stripe_subscriptions').insert({
-            customer_id: customerId,
-            status: 'not_started',
-          });
-
-          if (createSubscriptionError) {
-            // eslint-disable-next-line no-console
-            console.error('Failed to create subscription record for existing customer', createSubscriptionError);
-            return corsResponse(req, { error: 'Failed to create subscription record for existing customer' }, 500);
-          }
-        } else if (subscription.status === 'active' || subscription.status === 'trialing') {
-          // Prevent creating a new subscription if one is already active
-          // eslint-disable-next-line no-console
-          console.error(`User ${user.id} attempted to create subscription while having active status: ${subscription.status}`);
-          return corsResponse(req, { error: 'Active subscription already exists' }, 400);
+          console.warn('[stripe-checkout] Could not create subscription record:', createSubscriptionError.message);
+          // Continue anyway - webhook will handle it
         }
       }
     }
 
     // CRITICAL: Verify customer belongs to authenticated user before creating session
+    if (!customerId) {
+      // eslint-disable-next-line no-console
+      console.error(`[stripe-checkout] No customer ID available for user ${user.id}`);
+      return corsResponse(req, { error: 'Failed to initialize customer' }, 500);
+    }
+    
     const stripeCustomer = await stripe.customers.retrieve(customerId);
     if (stripeCustomer.deleted) {
       // eslint-disable-next-line no-console
-      console.error(`Attempted to use deleted customer: ${customerId}`);
+      console.error(`[stripe-checkout] Attempted to use deleted customer: ${customerId}`);
       return corsResponse(req, { error: 'Invalid customer' }, 400);
     }
     
     // Verify the customer metadata matches the authenticated user
-    if (stripeCustomer.metadata?.userId && stripeCustomer.metadata.userId !== user.id) {
+    if (stripeCustomer.metadata?.supabase_user_id && stripeCustomer.metadata.supabase_user_id !== user.id) {
       // eslint-disable-next-line no-console
-      console.error(`Customer ${customerId} does not belong to user ${user.id}`);
+      console.error(`[stripe-checkout] Customer ${customerId} does not belong to user ${user.id}`);
       return corsResponse(req, { error: 'Unauthorized' }, 403);
     }
 
