@@ -14,6 +14,7 @@ interface UseRequireProPlanOptions {
 
 interface UseRequireProPlanResult {
   isProActive: boolean;
+  hasProPlan: boolean; // Alias for isProActive for consistency
   isLoading: boolean;
   subscription: { subscription_status: string; price_id: string; cancel_at_period_end: boolean } | null;
   user: { id: string; email?: string; created_at: string } | null;
@@ -133,6 +134,7 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
 
   return {
     isProActive,
+    hasProPlan: isProActive, // Alias for consistency
     isLoading,
     subscription,
     user,

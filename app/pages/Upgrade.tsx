@@ -26,6 +26,7 @@ export default function UpgradePage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const [preselectedPriceId, setPreselectedPriceId] = useState<string | null>(null);
   const { prices, loading: pricesLoading, error: pricesError, formatPrice, getSavings } = useStripePrices();
 
   const checkAccess = useCallback(async () => {
@@ -55,7 +56,7 @@ export default function UpgradePage() {
         return;
       }
     } catch (error) {
-      console.error('Error checking access:', error);
+      // Error checking access is expected in some cases
     } finally {
       setCheckingSubscription(false);
     }
@@ -63,11 +64,36 @@ export default function UpgradePage() {
 
   useEffect(() => {
     checkAccess();
+    
+    // Check for preselected plan from sessionStorage
+    const storedPriceId = sessionStorage.getItem('redirectPriceId');
+    if (storedPriceId) {
+      setPreselectedPriceId(storedPriceId);
+      sessionStorage.removeItem('redirectPriceId');
+      
+      // Auto-scroll to pricing section after a short delay
+      setTimeout(() => {
+        const pricingSection = document.getElementById('pricing-plans');
+        if (pricingSection) {
+          pricingSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    }
+    
+    // Check if this is a new user
+    const isNewUser = sessionStorage.getItem('isNewUser') === 'true';
+    if (isNewUser) {
+      sessionStorage.removeItem('isNewUser');
+      toast('Welcome! Choose a plan to start your journey 🚀', {
+        duration: 5000,
+        icon: '✨'
+      });
+    }
   }, [checkAccess]);
 
   const handleUpgrade = async (priceId: string) => {
     // Dev logging
-    console.log('[Upgrade] Starting checkout with:', { 
+    // Starting checkout with: 
       priceId, 
       userId: user?.id, 
       email: user?.email,
@@ -98,7 +124,7 @@ export default function UpgradePage() {
       };
 
       // Dev logging
-      console.log('[Upgrade] Creating checkout session with params:', checkoutParams);
+      // Creating checkout session with params
 
       // Update loading message
       toast.loading('Connecting to payment processor...', { id: loadingToast });
@@ -111,20 +137,20 @@ export default function UpgradePage() {
       toast.success('Redirecting to checkout...');
     } catch (error) {
       // Log full error details
-      console.error('[Upgrade] Full checkout error:', error);
+      // Full checkout error - already handled with toast
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       
       // Check for specific error types
       if (errorMessage.includes('CSRF')) {
-        console.error('[Upgrade] CSRF token error - may need to refresh page');
+        // CSRF token error - may need to refresh page
         toast.error('Session expired. Please refresh the page and try again.');
       } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('authenticated')) {
-        console.error('[Upgrade] Authentication error');
+        // Authentication error
         toast.error('Please log in again to continue');
         navigate('/auth');
       } else if (errorMessage.includes('price')) {
-        console.error('[Upgrade] Price ID error:', priceId);
+        // Price ID error
         toast.error('Invalid pricing plan. Please contact support.');
       } else {
         toast.error(`Failed to start checkout: ${errorMessage}`);
@@ -238,7 +264,7 @@ export default function UpgradePage() {
 
             <Button
               onClick={() => {
-                console.log('[Upgrade] Monthly plan button clicked');
+                // Monthly plan button clicked
                 if (MONTHLY_PRICE_ID) {
                   handleUpgrade(MONTHLY_PRICE_ID);
                 } else {
@@ -306,7 +332,7 @@ export default function UpgradePage() {
 
             <Button
               onClick={() => {
-                console.log('[Upgrade] Annual plan button clicked');
+                // Annual plan button clicked
                 if (YEARLY_PRICE_ID) {
                   handleUpgrade(YEARLY_PRICE_ID);
                 } else {

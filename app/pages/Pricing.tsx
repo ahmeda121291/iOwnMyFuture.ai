@@ -1,20 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check, Shield, Clock, ArrowRight, Sparkles, Target, Brain, BarChart3, HeadphonesIcon } from 'lucide-react';
-import { createCheckoutSession } from '../core/api/stripeClient';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '../core/api/supabase';
 import toast from 'react-hot-toast';
 import { useStripePrices } from '../hooks/useStripePrices';
 import Loader from '../shared/components/Loader';
+import { handlePlanSelection } from '../shared/utils/navigationHelper';
+import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
   const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const navigate = useNavigate();
+  const { hasProPlan } = useRequireProPlan({ skipRedirect: true });
   const { prices, loading: pricesLoading, error: pricesError, formatPrice, getSavings } = useStripePrices();
 
+  // Check user state on mount
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Error checking user:', error as Error);
+      }
+    };
+    checkUser();
+  }, []);
+
   // Update page meta tags
-  React.useEffect(() => {
+  useEffect(() => {
     document.title = 'Pricing - MyFutureSelf.ai | Transform Your Life with AI'
     const metaDescription = document.querySelector('meta[name="description"]')
     if (metaDescription) {
@@ -29,48 +45,17 @@ export default function PricingPage() {
 
   const handleChoosePlan = async (priceId: string) => {
     setLoading(true);
-    const loadingToast = toast.loading('Preparing checkout...');
     
     try {
-      // Check if user is logged in
-      const user = await getCurrentUser();
-      if (!user) {
-        toast.dismiss(loadingToast);
-        toast.error('Please sign in to continue');
-        navigate('/auth');
-        return;
-      }
-
-      console.log('[Pricing] Starting checkout for price:', priceId);
-      
-      // Update loading message
-      toast.loading('Connecting to payment processor...', { id: loadingToast });
-      
-      // Create checkout session - function handles CSRF internally and redirects
-      await createCheckoutSession({
-        priceId,
-        mode: 'subscription',
-        successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${window.location.origin}/pricing`
+      // Use centralized navigation helper
+      await handlePlanSelection(priceId, {
+        user,
+        hasProPlan,
+        navigate
       });
-
-      // If we get here, redirect didn't happen - show success message
-      toast.dismiss(loadingToast);
-      toast.success('Redirecting to checkout...');
     } catch (error) {
-      console.error('[Pricing] Checkout Error:', error);
-      toast.dismiss(loadingToast);
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      if (errorMessage.includes('authenticated')) {
-        toast.error('Please sign in to continue');
-        navigate('/auth');
-      } else if (errorMessage.includes('CSRF')) {
-        toast.error('Session expired. Please refresh and try again.');
-      } else {
-        toast.error('Unable to start checkout. Please try again.');
-      }
+      console.error('[Pricing] Plan selection error:', error);
+      // Error handling is done in the helper
     } finally {
       setLoading(false);
     }

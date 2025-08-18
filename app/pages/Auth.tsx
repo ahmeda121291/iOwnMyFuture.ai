@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { getSession } from '../core/api/supabase';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { getSession, getUserSubscription } from '../core/api/supabase';
 import AuthForm from '../features/auth/AuthForm';
 import Loader from '../shared/components/Loader';
+import { handlePostAuthNavigation } from '../shared/utils/navigationHelper';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const _location = useLocation();
 
   const checkUser = useCallback(async () => {
     try {
@@ -30,26 +32,40 @@ export default function AuthPage() {
   const handleAuthSuccess = async () => {
     // Add a small delay to ensure auth state is propagated
     setTimeout(async () => {
-      // Check if user has Pro subscription
-      const session = await getSession();
-      if (session) {
-        const { getUserSubscription } = await import('../core/api/supabase');
+      try {
+        // Get current session and subscription
+        const session = await getSession();
+        if (!session) {
+          console.error('No session after auth success');
+          return;
+        }
+
+        // Check if user has Pro subscription
         const subscription = await getUserSubscription(session.user.id);
-        
-        // Check if they have an active subscription
-        const hasProAccess = 
+        const hasProPlan = 
           subscription && 
           subscription.subscription_status === 'active' &&
           subscription.price_id &&
           !subscription.cancel_at_period_end;
-        
-        if (hasProAccess) {
-          // Has Pro, go to dashboard
-          navigate('/dashboard');
-        } else {
-          // No Pro subscription, redirect to upgrade page
-          navigate('/upgrade');
-        }
+
+        // Check if this is a new user (created within last 5 minutes)
+        const userCreatedAt = new Date(session.user.created_at || Date.now());
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const isNewUser = userCreatedAt > fiveMinutesAgo;
+
+        // Use centralized navigation helper
+        await handlePostAuthNavigation(
+          {
+            user: session.user,
+            hasProPlan,
+            navigate
+          },
+          isNewUser
+        );
+      } catch (error) {
+        console.error('Error in post-auth navigation:', error);
+        // Fallback to upgrade page on error
+        navigate('/upgrade');
       }
     }, 100);
   };
