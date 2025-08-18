@@ -2,31 +2,31 @@
 
 ## Latest Update - Two-Step Token Creation
 
-Replaced single insert with two-step deactivate+insert strategy:
-1. **UPDATE active=false** for any existing active token (user-scoped)
-2. **INSERT new active token** with token_hash, expires_at, active=true
+Replaced single insert with two-step mark-used+insert strategy:
+1. **UPDATE used=true** for any existing unused tokens (user-scoped)
+2. **INSERT new unused token** with token_hash, expires_at, used=false
 3. **Retry logic** - Single retry on duplicate key to handle race conditions
 4. **IP address fallback** - Handles IP parsing errors gracefully
 
-This ensures only one active CSRF token per user at any time, satisfying the unique partial index:
+This ensures only one unused CSRF token per user at any time. Tokens are considered "active" when `used = FALSE` and `expires_at > NOW()`, satisfying the unique partial index:
 ```sql
-CREATE UNIQUE INDEX idx_csrf_tokens_user_id_active ON csrf_tokens (user_id) WHERE active = true;
+CREATE UNIQUE INDEX idx_csrf_tokens_user_id_active ON csrf_tokens (user_id) WHERE used = false AND expires_at > NOW();
 ```
 
 ### Technical Implementation
 
 ```typescript
-// Two-step function ensures one active token per user
+// Two-step function ensures one unused token per user
 async function createFreshTokenForUser(...) {
-  // Step 1: Deactivate existing active token
-  await update({ active: false }).eq('user_id', userId).eq('active', true)
+  // Step 1: Mark existing unused tokens as used
+  await update({ used: true, used_at: now }).eq('user_id', userId).eq('used', false)
   
-  // Step 2: Insert new active token
-  await insert({ user_id, token_hash, expires_at, active: true, used: false })
+  // Step 2: Insert new unused token
+  await insert({ user_id, token_hash, expires_at, used: false })
   
   // Handle race: retry once if duplicate key
   if (duplicateKeyError) {
-    // Deactivate again and retry insert
+    // Mark as used again and retry insert
   }
 }
 ```

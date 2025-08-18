@@ -2144,6 +2144,7 @@ CREATE INDEX idx_csrf_tokens_used_at ON public.csrf_tokens USING btree (used_at)
 
 --
 -- Name: idx_csrf_tokens_user_id_active; Type: INDEX; Schema: public; Owner: -
+-- Note: Index name retained for compatibility. Tokens are "active" when used = FALSE
 --
 
 CREATE UNIQUE INDEX idx_csrf_tokens_user_id_active ON public.csrf_tokens USING btree (user_id) WHERE (used = false);

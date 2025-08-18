@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS csrf_tokens (
     used BOOLEAN DEFAULT FALSE
 );
 
--- Create unique index on user_id for active tokens
+-- Create unique index on user_id for unused tokens
+-- Tokens are considered "active" when used = FALSE and expires_at is in the future
 CREATE UNIQUE INDEX IF NOT EXISTS idx_csrf_tokens_user_id_active 
 ON csrf_tokens(user_id) 
 WHERE used = FALSE AND expires_at > NOW();

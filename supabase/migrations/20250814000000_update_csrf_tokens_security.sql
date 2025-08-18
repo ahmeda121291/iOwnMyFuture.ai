@@ -3,8 +3,9 @@ ALTER TABLE csrf_tokens
 ADD COLUMN IF NOT EXISTS ip_address INET,
 ADD COLUMN IF NOT EXISTS user_agent TEXT;
 
--- Update the unique index to allow only one active token per user
+-- Update the unique index to allow only one unused token per user
 -- This enforces single-token policy for better security
+-- Tokens are considered "active" when used = FALSE and expires_at is in the future
 DROP INDEX IF EXISTS idx_csrf_tokens_user_id_active;
 CREATE UNIQUE INDEX idx_csrf_tokens_user_id_active 
 ON csrf_tokens(user_id) 
