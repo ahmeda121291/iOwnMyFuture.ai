@@ -341,6 +341,9 @@ export default function MoodboardPage() {
                 onElementsChange={setElements}
                 onSave={handleSaveMoodboard}
                 isEditable={isEditing}
+                moodboardId={currentMoodboardId}
+                title={currentMoodboard?.title}
+                description={currentMoodboard?.description}
               />
             </Suspense>
 

@@ -1,8 +1,10 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { Trash2, Download, Share, Sparkles } from 'lucide-react';
+import { Trash2, Download, Share, Sparkles, Save, Loader2 } from 'lucide-react';
 import { type MoodboardElement } from '../../core/types';
 import { MoodboardElementSchema, validateData } from '../../shared/validation/schemas';
 import { useCSRFToken, createSecureFormData } from '../../shared/security/csrf';
+import { supabase } from '../../core/api/supabase';
+import html2canvas from 'html2canvas';
 import toast from 'react-hot-toast';
 import { errorTracker } from '../../shared/utils/errorTracking';
 
@@ -12,6 +14,9 @@ interface MoodboardCanvasProps {
   onElementsChange: (elements: MoodboardElement[]) => void;
   onSave: () => void;
   isEditable?: boolean;
+  moodboardId?: string;
+  title?: string;
+  description?: string;
 }
 
 // Types for internal state
@@ -28,13 +33,17 @@ export default function MoodboardCanvas({
   elements, 
   onElementsChange, 
   onSave, 
-  isEditable = true 
+  isEditable = true,
+  moodboardId,
+  title,
+  description
 }: MoodboardCanvasProps) {
   // Custom hooks and state at top
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
-  const [_isSaving, _setIsSaving] = useState(false);
-  const { getToken: _getToken } = useCSRFToken();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const { getToken } = useCSRFToken();
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState<DragOffset>({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -139,33 +148,77 @@ export default function MoodboardCanvas({
     onElementsChange(updatedElements);
   }, [elements, onElementsChange]);
 
-  const _handleSecureSave = useCallback(async () => {
+  const handleSecureSave = useCallback(async () => {
     // Check for validation errors
     if (Object.keys(validationErrors).length > 0) {
       toast.error('Please fix validation errors before saving.');
       return;
     }
 
-    _setIsSaving(true);
+    setIsSaving(true);
     try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('Failed to get CSRF token');
+      }
+
+      // Get session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No session found');
+      }
+
       // Create secure form data with CSRF token
-      const _secureFormData = await createSecureFormData({
-        elements: elements,
+      const secureFormData = await createSecureFormData({
+        moodboardId,
+        elements,
+        title,
+        description,
+        csrfToken: token,
         timestamp: new Date().toISOString(),
       });
 
-      // Call the parent's onSave function
+      // Call the secure save Edge Function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/moodboard-save`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            moodboardId,
+            elements,
+            title,
+            description,
+            csrfToken: token,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save moodboard');
+      }
+
+      const result = await response.json();
+      
+      // Call the parent's onSave function to update UI
       await onSave();
+      
+      toast.success('Moodboard saved securely!');
+      return result.moodboard;
     } catch (error) {
       errorTracker.trackError(error, { 
         component: 'MoodboardCanvas', 
         action: 'saveMoodboard' 
       });
-      toast.error('Failed to save moodboard. Please try again.');
+      toast.error(error.message || 'Failed to save moodboard. Please try again.');
     } finally {
-      _setIsSaving(false);
+      setIsSaving(false);
     }
-  }, [validationErrors, elements, onSave]);
+  }, [validationErrors, elements, onSave, moodboardId, title, description, getToken]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     if (e.target === canvasRef.current) {
@@ -173,9 +226,87 @@ export default function MoodboardCanvas({
     }
   }, []);
 
+  const handleExport = useCallback(async (format: 'json' | 'html' | 'png' = 'json') => {
+    if (!moodboardId) {
+      toast.error('Please save the moodboard first');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No session found');
+      }
+
+      if (format === 'png') {
+        // Use html2canvas to generate PNG
+        if (!canvasRef.current) {
+          throw new Error('Canvas not found');
+        }
+        
+        const canvas = await html2canvas(canvasRef.current, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          logging: false,
+        });
+        
+        // Convert to blob and download
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `moodboard-${moodboardId}.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast.success('Moodboard exported as PNG!');
+          }
+        }, 'image/png');
+      } else {
+        // Export via Edge Function (JSON or HTML)
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/moodboard-export?moodboardId=${moodboardId}&format=${format}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Export failed');
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `moodboard-${moodboardId}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        toast.success(`Moodboard exported as ${format.toUpperCase()}!`);
+      }
+    } catch (error) {
+      errorTracker.trackError(error, {
+        component: 'MoodboardCanvas',
+        action: 'exportMoodboard',
+        format,
+      });
+      toast.error('Failed to export moodboard');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [moodboardId]);
+
   const handleShare = useCallback(() => {
     const shareData = {
-      title: 'My Vision Board',
+      title: title || 'My Vision Board',
       text: 'Check out my vision board - visualizing my future goals and dreams!',
       url: window.location.href
     };
@@ -187,7 +318,7 @@ export default function MoodboardCanvas({
       navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}\n${shareData.url}`);
       toast.success('Vision board details copied to clipboard!');
     }
-  }, []);
+  }, [title]);
 
   // Element render function
   const renderElement = useCallback((element: MoodboardElement) => {
@@ -442,15 +573,58 @@ function CanvasControls({ elementCount, onSave, onShare }: CanvasControlsProps) 
       
       <div className="flex space-x-2">
         <button
-          onClick={onSave}
-          className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors flex items-center"
+          onClick={handleSecureSave}
+          disabled={isSaving}
+          className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent/90 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Download className="w-4 h-4 mr-2" />
-          Save Board
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Save className="w-4 h-4 mr-2" />
+          )}
+          {isSaving ? 'Saving...' : 'Save Board'}
         </button>
+
+        <div className="relative group">
+          <button
+            disabled={isExporting}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isExporting ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4 mr-2" />
+            )}
+            Export
+          </button>
+          
+          {/* Export dropdown menu */}
+          {!isExporting && (
+            <div className="absolute top-full mt-2 right-0 bg-white shadow-lg rounded-lg border border-gray-200 py-1 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all duration-200 z-50 min-w-[120px]">
+              <button
+                onClick={() => handleExport('png')}
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors"
+              >
+                As PNG
+              </button>
+              <button
+                onClick={() => handleExport('json')}
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors"
+              >
+                As JSON
+              </button>
+              <button
+                onClick={() => handleExport('html')}
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition-colors"
+              >
+                As HTML
+              </button>
+            </div>
+          )}
+        </div>
         
         <button
-          onClick={onShare}
+          onClick={handleShare}
           className="px-4 py-2 bg-white border border-accent text-accent rounded-lg hover:bg-accent hover:text-white transition-colors flex items-center"
         >
           <Share className="w-4 h-4 mr-2" />
