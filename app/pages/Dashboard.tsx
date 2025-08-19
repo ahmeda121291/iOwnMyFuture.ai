@@ -5,6 +5,7 @@ import { supabase } from '../core/api/supabase';
 import { errorTracker } from '../shared/utils/errorTracking';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
 import { safeNavigate } from '../shared/utils/navigation';
+import { getActivityIcon, getActivityColor, getActivityBgColor } from '../shared/utils/activityIcons';
 import Button from '../shared/components/Button';
 import Loader from '../shared/components/Loader';
 import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
@@ -77,8 +78,8 @@ export default function DashboardPage() {
             supabase.from('journal_entries').select('id').eq('user_id', user.id)
           ]);
 
-          if (boardsResponse.error) throw boardsResponse.error;
-          if (entriesResponse.error) throw entriesResponse.error;
+          if (boardsResponse.error) {throw boardsResponse.error;}
+          if (entriesResponse.error) {throw entriesResponse.error;}
 
           const boardCount = boardsResponse.data?.length || 0;
           const entryCount = entriesResponse.data?.length || 0;
@@ -371,10 +372,10 @@ function ActivityList() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['activity-feed', user?.id, offset],
     queryFn: async () => {
-      if (!user?.id) return { activities: [], hasMore: false };
+      if (!user?.id) {return { activities: [], hasMore: false };}
 
       const { data: session } = await supabase.auth.getSession();
-      if (!session?.session) throw new Error('No session');
+      if (!session?.session) {throw new Error('No session');}
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/activity-feed?limit=${limit}&offset=${offset}`,
@@ -397,7 +398,7 @@ function ActivityList() {
   });
 
   const handleActivityClick = (activity: ActivityItem) => {
-    if (!activity.reference_id) return;
+    if (!activity.reference_id) {return;}
 
     switch (activity.type) {
       case 'journal_entry':
@@ -464,8 +465,8 @@ function ActivityList() {
           onClick={() => handleActivityClick(activity)}
           className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
         >
-          <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-primary/10 to-accent/10 rounded-full flex items-center justify-center text-lg">
-            {activity.icon}
+          <div className={`flex-shrink-0 w-10 h-10 bg-gradient-to-br ${getActivityBgColor(activity.action)} rounded-full flex items-center justify-center ${getActivityColor(activity.action)}`}>
+            {getActivityIcon(activity.type, activity.action)}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between">
