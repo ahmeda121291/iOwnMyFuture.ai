@@ -100,52 +100,49 @@ export const signOut = async () => {
 // Stripe helpers
 export const getUserSubscription = async (_userId?: string) => {
   try {
-    // First try the user_subscription_view which has all the fields we need
-    const { data: viewData, error: viewError } = await supabase
-      .from('user_subscription_view')
+    // Query the stripe_user_subscriptions view which has all the fields we need
+    // This view automatically scopes to the authenticated user via RLS
+    const { data, error } = await supabase
+      .from('stripe_user_subscriptions')
       .select('*')
       .maybeSingle();
     
-    if (!viewError && viewData) {
-      // Check if subscription is active and current
-      const isActive = viewData.status === 'active' || viewData.status === 'trialing';
-      const isCurrent = viewData.current_period_end ? new Date(viewData.current_period_end) > new Date() : false;
-      
-      // Return the subscription if it's active and current
-      if (isActive && isCurrent) {
-        return viewData;
-      }
-    }
-    
-    // Fallback to direct query with proper handling of multiple rows
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-      .order('created_at', { ascending: false })
-      .limit(1);
-    
     if (error) {
       if (error.code === 'PGRST116') {
-        // No subscription found - this is expected for new users
-        return null;
+        // Multiple rows found - shouldn't happen with the view, but handle gracefully
+        console.warn('Multiple subscription rows found, fetching most recent');
+        
+        // Fetch all and return the most recent active one
+        const { data: allSubs, error: allError } = await supabase
+          .from('stripe_user_subscriptions')
+          .select('*')
+          .order('current_period_start', { ascending: false });
+        
+        if (allError || !allSubs || allSubs.length === 0) {
+          return null;
+        }
+        
+        // Find the first active subscription
+        const activeSub = allSubs.find(sub => 
+          (sub.subscription_status === 'active' || sub.subscription_status === 'trialing') &&
+          sub.current_period_end && new Date(sub.current_period_end) > new Date()
+        );
+        
+        return activeSub || null;
       }
       console.warn('Error getting user subscription:', error);
       return null;
     }
     
-    if (!data || data.length === 0) {
+    if (!data) {
       return null;
     }
     
-    // Get the most recent subscription
-    const subscription = data[0];
+    // Check if subscription is active and current
+    const isActive = data.subscription_status === 'active' || data.subscription_status === 'trialing';
+    const isCurrent = data.current_period_end ? new Date(data.current_period_end) > new Date() : false;
     
-    // Check if subscription is valid
-    const isActive = subscription.status === 'active' || subscription.status === 'trialing';
-    const isCurrent = subscription.current_period_end ? new Date(subscription.current_period_end) > new Date() : false;
-    
-    return (isActive && isCurrent) ? subscription : null;
+    return (isActive && isCurrent) ? data : null;
   } catch (error) {
     console.warn('Unexpected error in getUserSubscription:', error);
     return null;

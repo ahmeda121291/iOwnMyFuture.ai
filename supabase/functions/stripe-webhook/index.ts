@@ -15,7 +15,7 @@ const APP_URL = Deno.env.get('APP_URL') || 'https://iownmyfuture.ai';
 
 // Initialize clients
 const stripe = new Stripe(stripeSecret, {
-  appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
+  appInfo: { name: 'I Own My Future', version: '1.0.0' },
 });
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -399,9 +399,9 @@ async function sendConfirmationEmail(session: Stripe.Checkout.Session) {
   }).format(amountTotal / 100);
 
   const emailData = {
-    from: `MyFutureSelf <${FROM_EMAIL}>`,
+    from: `I Own My Future <${FROM_EMAIL}>`,
     to: customerEmail,
-    subject: 'Payment Confirmation - MyFutureSelf',
+    subject: 'Payment Confirmation - I Own My Future',
     html: `
       <!DOCTYPE html>
       <html>
@@ -465,7 +465,7 @@ async function sendConfirmationEmail(session: Stripe.Checkout.Session) {
           </div>
           <div class="footer">
             <p>If you have any questions, please contact our support team.</p>
-            <p>&copy; ${new Date().getFullYear()} MyFutureSelf. All rights reserved.</p>
+            <p>&copy; ${new Date().getFullYear()} I Own My Future. All rights reserved.</p>
           </div>
         </div>
       </body>

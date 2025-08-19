@@ -10,7 +10,7 @@ import {
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 const stripe = new Stripe(stripeSecret, {
-  appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
+  appInfo: { name: 'I Own My Future', version: '1.0.0' },
 });
 
 // Product IDs from Stripe Dashboard

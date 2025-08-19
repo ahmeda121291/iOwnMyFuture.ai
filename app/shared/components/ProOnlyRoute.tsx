@@ -10,7 +10,7 @@ interface ProOnlyRouteProps {
 export default function ProOnlyRoute({ children }: ProOnlyRouteProps) {
   const { isLoading, isProActive } = useRequireProPlan({
     showToast: true,
-    toastMessage: 'You must subscribe to Pro to use MyFutureSelf.'
+    toastMessage: 'You must subscribe to Pro to use I Own My Future.'
   });
 
   if (isLoading) {

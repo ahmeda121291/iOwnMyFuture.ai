@@ -12,7 +12,7 @@ const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
 const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
 
 const stripe = new Stripe(stripeSecret, {
-  appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
+  appInfo: { name: 'I Own My Future', version: '1.0.0' },
 });
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);

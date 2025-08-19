@@ -10,7 +10,7 @@ const stripeSecret = Deno.env.get('STRIPE_SECRET_KEY') ?? '';
 // Initialize clients
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 const stripe = new Stripe(stripeSecret, {
-  appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
+  appInfo: { name: 'I Own My Future', version: '1.0.0' },
 });
 
 const corsHeaders = {
@@ -108,53 +108,62 @@ Deno.serve(async (req) => {
         ? await stripe.subscriptions.retrieve(session.subscription)
         : session.subscription as Stripe.Subscription;
       
-      // Update subscription in database using proper schema
+      // First, ensure stripe_customers table has the user linked
+      const { error: customerError } = await supabase
+        .from('stripe_customers')
+        .upsert({
+          user_id: user.id,
+          customer_id: session.customer as string,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+      
+      if (customerError) {
+        console.error('Failed to link customer:', customerError);
+      }
+      
+      // Update stripe_subscriptions table with subscription data
+      const subscriptionStatus = subscription.status === 'active' ? 'active' : 
+                                subscription.status === 'trialing' ? 'trialing' : 
+                                subscription.status as any;
+      
       const { error: updateError } = await supabase
+        .from('stripe_subscriptions')
+        .upsert({
+          customer_id: session.customer as string,
+          subscription_id: subscription.id,
+          price_id: subscription.items.data[0]?.price.id,
+          status: subscriptionStatus,
+          current_period_start: subscription.current_period_start,
+          current_period_end: subscription.current_period_end,
+          cancel_at_period_end: subscription.cancel_at_period_end,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'customer_id' // stripe_subscriptions uses customer_id as unique
+        });
+
+      if (updateError) {
+        console.error('Failed to update stripe_subscriptions:', updateError);
+      } else {
+        console.log(`Successfully confirmed subscription ${subscription.id} for customer ${session.customer}`);
+      }
+      
+      // Also update the legacy subscriptions table for backward compatibility
+      const { error: legacyError } = await supabase
         .from('subscriptions')
         .upsert({
           user_id: user.id,
           stripe_customer_id: session.customer as string,
           stripe_subscription_id: subscription.id,
           status: subscription.status,
-          subscription_status: subscription.status,
-          price_id: subscription.items.data[0]?.price.id,
-          quantity: subscription.items.data[0]?.quantity || 1,
-          cancel_at_period_end: subscription.cancel_at_period_end,
-          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-          plan_name: planName,
-          updated_at: new Date().toISOString()
+          created_at: new Date().toISOString()
         }, {
-          onConflict: 'user_id' // Use user_id as the unique constraint
+          onConflict: 'user_id'
         });
-
-      if (updateError) {
-        console.error('Failed to update subscription:', updateError);
-        // Try using the sync function as fallback
-        try {
-          const { error: syncError } = await supabase.rpc('sync_subscription_from_stripe', {
-            p_user_id: user.id,
-            p_stripe_customer_id: session.customer as string,
-            p_stripe_subscription_id: subscription.id,
-            p_status: subscription.status,
-            p_price_id: subscription.items.data[0]?.price.id,
-            p_current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            p_current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-            p_cancel_at_period_end: subscription.cancel_at_period_end,
-            p_quantity: subscription.items.data[0]?.quantity || 1,
-            p_plan_name: planName
-          });
-          
-          if (syncError) {
-            console.error('Failed to sync subscription via function:', syncError);
-          } else {
-            console.log(`Successfully synced subscription ${subscription.id} for user ${user.id} via function`);
-          }
-        } catch (funcError) {
-          console.error('Error calling sync function:', funcError);
-        }
-      } else {
-        console.log(`Successfully confirmed subscription ${subscription.id} for user ${user.id}`);
+      
+      if (legacyError) {
+        console.error('Failed to update legacy subscriptions table:', legacyError);
       }
     }
 
@@ -162,54 +171,60 @@ Deno.serve(async (req) => {
     if (session.mode === 'payment') {
       // Calculate period end based on plan
       const periodDays = planName.includes('Annual') ? 365 : 30;
-      const periodEnd = new Date(Date.now() + periodDays * 24 * 60 * 60 * 1000);
+      const periodEndTimestamp = Math.floor(Date.now() / 1000) + (periodDays * 24 * 60 * 60);
       
+      // First, ensure stripe_customers table has the user linked
+      const { error: customerError } = await supabase
+        .from('stripe_customers')
+        .upsert({
+          user_id: user.id,
+          customer_id: session.customer as string,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
+      
+      if (customerError) {
+        console.error('Failed to link customer:', customerError);
+      }
+      
+      // Create a pseudo-subscription in stripe_subscriptions for one-time payments
       const { error: updateError } = await supabase
+        .from('stripe_subscriptions')
+        .upsert({
+          customer_id: session.customer as string,
+          subscription_id: `one_time_${session.id}`, // Use session ID as pseudo subscription ID
+          price_id: priceId,
+          status: 'active' as any,
+          current_period_start: Math.floor(Date.now() / 1000),
+          current_period_end: periodEndTimestamp,
+          cancel_at_period_end: false,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'customer_id'
+        });
+
+      if (updateError) {
+        console.error('Failed to create subscription record in stripe_subscriptions:', updateError);
+      } else {
+        console.log(`Successfully created one-time payment record for customer ${session.customer}`);
+      }
+      
+      // Also update the legacy subscriptions table
+      const { error: legacyError } = await supabase
         .from('subscriptions')
         .upsert({
           user_id: user.id,
           stripe_customer_id: session.customer as string,
-          stripe_subscription_id: null, // No subscription ID for one-time payments
+          stripe_subscription_id: null,
           status: 'active',
-          subscription_status: 'active',
-          price_id: priceId,
-          plan_name: planName,
-          current_period_start: new Date().toISOString(),
-          current_period_end: periodEnd.toISOString(),
-          cancel_at_period_end: false,
-          quantity: 1,
-          updated_at: new Date().toISOString()
+          created_at: new Date().toISOString()
         }, {
-          onConflict: 'user_id' // Use user_id as the unique constraint
+          onConflict: 'user_id'
         });
-
-      if (updateError) {
-        console.error('Failed to create subscription record:', updateError);
-        // Try using the sync function as fallback
-        try {
-          const { error: syncError } = await supabase.rpc('sync_subscription_from_stripe', {
-            p_user_id: user.id,
-            p_stripe_customer_id: session.customer as string,
-            p_stripe_subscription_id: null,
-            p_status: 'active',
-            p_price_id: priceId,
-            p_current_period_start: new Date().toISOString(),
-            p_current_period_end: periodEnd.toISOString(),
-            p_cancel_at_period_end: false,
-            p_quantity: 1,
-            p_plan_name: planName
-          });
-          
-          if (syncError) {
-            console.error('Failed to sync payment via function:', syncError);
-          } else {
-            console.log(`Successfully synced one-time payment for user ${user.id} via function`);
-          }
-        } catch (funcError) {
-          console.error('Error calling sync function:', funcError);
-        }
-      } else {
-        console.log(`Successfully created subscription record for one-time payment for user ${user.id}`);
+      
+      if (legacyError) {
+        console.error('Failed to update legacy subscriptions table:', legacyError);
       }
     }
 

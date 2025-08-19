@@ -26,7 +26,7 @@ export const getProducts = async (): Promise<Product[]> => {
         id: 'pro_monthly',
         productId: prices.monthly.productId,
         priceId: prices.monthly.priceId,
-        name: 'MyFutureSelf Pro Monthly',
+        name: 'I Own My Future Pro Monthly',
         description: 'Essential AI-powered vision board and journaling platform to help you achieve your goals.',
         price: prices.monthly.amount / 100, // Convert from cents to dollars
         mode: 'subscription'
@@ -35,7 +35,7 @@ export const getProducts = async (): Promise<Product[]> => {
         id: 'pro_annual',
         productId: prices.yearly.productId,
         priceId: prices.yearly.priceId,
-        name: 'MyFutureSelf Pro Annual',
+        name: 'I Own My Future Pro Annual',
         description: 'Premium AI-powered vision board and journaling platform to transform your dreams into reality.',
         price: prices.yearly.amount / 100, // Convert from cents to dollars
         mode: 'subscription'

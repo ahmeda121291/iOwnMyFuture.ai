@@ -31,7 +31,7 @@ export default function PricingPage() {
 
   // Update page meta tags
   useEffect(() => {
-    document.title = 'Pricing - MyFutureSelf.ai | Transform Your Life with AI'
+    document.title = 'Pricing - I Own My Future | Transform Your Life with AI'
     const metaDescription = document.querySelector('meta[name="description"]')
     if (metaDescription) {
       metaDescription.setAttribute('content', 'Choose the Pro plan that fits your journey. Monthly at $18 or yearly with discount. Unlimited AI vision boards, smart journaling, and progress analytics.')
