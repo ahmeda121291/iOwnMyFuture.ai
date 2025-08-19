@@ -52,9 +52,12 @@ export default function LandingPage() {
   const [_isVisible, setIsVisible] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isNavigating, setIsNavigating] = useState<boolean>(false);
 
   useEffect(() => {
     setIsVisible(true);
+    // Reset navigation state when component mounts (e.g., when coming back from "Maybe later")
+    setIsNavigating(false);
     
     // Check authentication status using session
     const checkAuth = async () => {
@@ -95,10 +98,12 @@ export default function LandingPage() {
   // Smart CTA handler - routes based on auth status
   const handleStartJournaling = async () => {
     try {
-      // Don't show toast while checking - just wait
-      if (isAuthChecking) {
+      // Don't allow action if already checking or navigating
+      if (isAuthChecking || isNavigating) {
         return;
       }
+      
+      setIsNavigating(true);
       
       // Check current session state
       const session = await getSession();
@@ -116,6 +121,7 @@ export default function LandingPage() {
         action: 'handleStartJournaling'
       });
       toast.error('Navigation failed. Please try again.');
+      setIsNavigating(false);
     }
   };
 
@@ -259,8 +265,8 @@ export default function LandingPage() {
                   variant="gradient"
                   size="lg"
                   onClick={handleStartJournaling}
-                  disabled={isAuthChecking}
-                  loading={isAuthChecking}
+                  disabled={isAuthChecking || isNavigating}
+                  loading={isAuthChecking || isNavigating}
                   icon={<ArrowRight className="w-5 h-5" />}
                   iconPosition="right"
                   fullWidth={false}
@@ -397,8 +403,8 @@ export default function LandingPage() {
               variant="gradient"
               size="lg"
               onClick={handleStartJournaling}
-              disabled={isAuthChecking}
-              loading={isAuthChecking}
+              disabled={isAuthChecking || isNavigating}
+              loading={isAuthChecking || isNavigating}
               icon={<ArrowRight className="w-5 h-5" />}
               iconPosition="right"
             >
@@ -654,8 +660,8 @@ export default function LandingPage() {
                 variant="secondary"
                 size="lg"
                 onClick={handleStartJournaling}
-                disabled={isAuthChecking}
-                loading={isAuthChecking}
+                disabled={isAuthChecking || isNavigating}
+                loading={isAuthChecking || isNavigating}
                 className="bg-white text-gray-900 hover:bg-gray-100 min-w-[280px]"
                 icon={<ArrowRight className="w-5 h-5" />}
                 iconPosition="right"

@@ -27,7 +27,7 @@ export default function UpgradePage() {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
   const [_preselectedPriceId, setPreselectedPriceId] = useState<string | null>(null);
-  const { prices, loading: pricesLoading, error: pricesError, formatPrice, getSavings } = useStripePrices();
+  const { prices, loading: pricesLoading, didFallback, formatPrice, getSavings } = useStripePrices();
 
   const checkAccess = useCallback(async () => {
     try {
@@ -172,19 +172,8 @@ export default function UpgradePage() {
     );
   }
 
-  // Show error if prices failed to load
-  if (pricesError) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1]">
-        <div className="container mx-auto px-4 py-12">
-          <div className="text-center">
-            <p className="text-xl text-red-600 mb-4">Unable to load pricing information</p>
-            <p className="text-gray-700">Please try refreshing the page or contact support.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Don't show error page if we have fallback prices
+  // The pricing will be shown with a warning banner instead
 
   // Unified features list for both monthly and yearly plans
   const features = [
@@ -208,6 +197,33 @@ export default function UpgradePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#F5F5FA] to-[#C3B1E1]">
       <div className="container mx-auto px-4 py-12">
+        {/* Show warning banner if using fallback prices */}
+        {didFallback && (
+          <div className="max-w-4xl mx-auto mb-8">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700">
+                  We had trouble fetching live prices. Displaying default values. The actual prices will be confirmed at checkout.
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="ml-auto flex-shrink-0 text-yellow-500 hover:text-yellow-600"
+              >
+                <span className="sr-only">Retry</span>
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
