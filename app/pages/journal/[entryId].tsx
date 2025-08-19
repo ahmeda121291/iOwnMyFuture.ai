@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Edit3, 
@@ -9,8 +9,13 @@ import {
   Brain,
   Download,
   Share2,
-  FileText
+  FileText,
+  BookOpen,
+  Tag,
+  Heart,
+  Sparkles
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser, supabase } from '../../core/api/supabase';
 import { summarizeJournalEntry } from '../../core/api/openai';
 import { type JournalEntry } from '../../core/types';
@@ -499,14 +504,7 @@ export default function JournalEntryPage() {
             </div>
 
             {/* Related Entries */}
-            <div className="card">
-              <h3 className="text-lg font-semibold text-text-primary mb-4">Related Entries</h3>
-              <div className="space-y-2 text-sm">
-                <p className="text-text-secondary">
-                  Find patterns and connections between your journal entries coming soon!
-                </p>
-              </div>
-            </div>
+            <RelatedEntries entryId={entry.id} />
           </div>
         </div>
 
@@ -525,6 +523,188 @@ export default function JournalEntryPage() {
           />
         </Modal>
       </div>
+    </div>
+  );
+}
+
+interface RelatedEntry {
+  id: string;
+  entry_date: string;
+  title: string;
+  excerpt: string;
+  mood?: string;
+  category?: string;
+  tags: string[];
+  similarity_score: number;
+  created_at: string;
+}
+
+interface RelatedEntriesProps {
+  entryId: string;
+}
+
+function RelatedEntries({ entryId }: RelatedEntriesProps) {
+  const navigate = useNavigate();
+  
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['related-entries', entryId],
+    queryFn: async () => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session) throw new Error('No session');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/related-entries?entry_id=${entryId}&limit=5`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.session.access_token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch related entries');
+      }
+
+      return await response.json();
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  const moodIcons: Record<string, string> = {
+    happy: '😊',
+    sad: '😢',
+    neutral: '😐',
+    excited: '🎉',
+    anxious: '😰',
+    grateful: '🙏',
+    stressed: '😫',
+    motivated: '💪'
+  };
+
+  const categoryColors: Record<string, string> = {
+    gratitude: 'bg-purple-100 text-purple-700',
+    goals: 'bg-blue-100 text-blue-700',
+    reflection: 'bg-green-100 text-green-700',
+    dreams: 'bg-pink-100 text-pink-700',
+    challenges: 'bg-orange-100 text-orange-700',
+    achievements: 'bg-yellow-100 text-yellow-700',
+    general: 'bg-gray-100 text-gray-700'
+  };
+
+  if (isLoading) {
+    return (
+      <div className="card">
+        <h3 className="text-lg font-semibold text-text-primary mb-4">Related Entries</h3>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card">
+        <h3 className="text-lg font-semibold text-text-primary mb-4">Related Entries</h3>
+        <div className="text-center py-4">
+          <p className="text-text-secondary text-sm">Failed to load related entries</p>
+        </div>
+      </div>
+    );
+  }
+
+  const entries: RelatedEntry[] = data?.entries || [];
+
+  if (entries.length === 0) {
+    return (
+      <div className="card">
+        <h3 className="text-lg font-semibold text-text-primary mb-4">Related Entries</h3>
+        <div className="text-center py-6">
+          <BookOpen className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+          <p className="text-text-secondary text-sm">No related entries found yet.</p>
+          <p className="text-text-secondary text-xs mt-1">Keep journaling to discover patterns!</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-text-primary">Related Entries</h3>
+        <Sparkles className="w-4 h-4 text-accent" />
+      </div>
+      
+      <div className="space-y-3">
+        {entries.map((relatedEntry) => (
+          <Link
+            key={relatedEntry.id}
+            to={`/journal/${relatedEntry.id}`}
+            className="block p-3 rounded-lg border border-gray-200 hover:border-primary/30 hover:bg-gray-50 transition-all group"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex-1">
+                <div className="flex items-center space-x-2 mb-1">
+                  <span className="text-sm font-medium text-text-primary group-hover:text-primary transition-colors">
+                    {relatedEntry.title}
+                  </span>
+                  {relatedEntry.similarity_score > 50 && (
+                    <span className="text-xs px-2 py-0.5 bg-accent/10 text-accent rounded-full">
+                      {relatedEntry.similarity_score}% match
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-text-secondary line-clamp-2">
+                  {relatedEntry.excerpt}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-3 text-xs">
+              <span className="text-text-secondary">
+                {new Date(relatedEntry.entry_date).toLocaleDateString()}
+              </span>
+              
+              {relatedEntry.mood && (
+                <span className="flex items-center">
+                  {moodIcons[relatedEntry.mood] || '😊'}
+                  <span className="ml-1 text-text-secondary">{relatedEntry.mood}</span>
+                </span>
+              )}
+              
+              {relatedEntry.category && (
+                <span className={`px-2 py-0.5 rounded-full text-xs ${categoryColors[relatedEntry.category] || categoryColors.general}`}>
+                  {relatedEntry.category}
+                </span>
+              )}
+              
+              {relatedEntry.tags && relatedEntry.tags.length > 0 && (
+                <span className="flex items-center text-text-secondary">
+                  <Tag className="w-3 h-3 mr-1" />
+                  {relatedEntry.tags.length}
+                </span>
+              )}
+            </div>
+          </Link>
+        ))}
+      </div>
+      
+      {entries.length >= 5 && (
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <Link
+            to="/journal"
+            className="text-xs text-primary hover:text-primary/80 font-medium"
+          >
+            View all journal entries →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

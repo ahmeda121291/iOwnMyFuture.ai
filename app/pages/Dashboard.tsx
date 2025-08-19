@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Target, BookOpen, TrendingUp, Crown, Plus, AlertCircle } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Target, BookOpen, TrendingUp, Crown, Plus, AlertCircle, Clock, ChevronRight, Activity } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
 import { errorTracker } from '../shared/utils/errorTracking';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
@@ -11,6 +11,7 @@ import SubscriptionStatus from '../features/Subscription/SubscriptionStatus';
 import MoodAnalyticsPanelLazy from '../features/insights/MoodAnalyticsPanelLazy';
 import FirstTimeChecklist from '../features/Onboarding/FirstTimeChecklist';
 import GoalsDashboard from '../features/goals/GoalsDashboard';
+import { useQuery } from '@tanstack/react-query';
 
 // Types
 
@@ -18,6 +19,20 @@ interface Metrics {
   boardCount: number;
   entryCount: number;
   daysActive: number;
+}
+
+interface ActivityItem {
+  id: string;
+  type: string;
+  action: string;
+  reference_id: string | null;
+  title: string;
+  description: string;
+  metadata: Record<string, any>;
+  created_at: string;
+  icon: string;
+  color: string;
+  timeAgo: string;
 }
 
 interface QuickAction {
@@ -348,10 +363,148 @@ function RecentActivitySection({ hasActivity, onCreateVisionBoard }: RecentActiv
 }
 
 function ActivityList() {
-  // This would be populated with actual activity data
+  const navigate = useNavigate();
+  const { user } = useRequireProPlan();
+  const [offset, setOffset] = useState(0);
+  const limit = 20;
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['activity-feed', user?.id, offset],
+    queryFn: async () => {
+      if (!user?.id) return { activities: [], hasMore: false };
+
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session) throw new Error('No session');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/activity-feed?limit=${limit}&offset=${offset}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${session.session.access_token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch activity feed');
+      }
+
+      return await response.json();
+    },
+    enabled: !!user?.id,
+    staleTime: 30000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  const handleActivityClick = (activity: ActivityItem) => {
+    if (!activity.reference_id) return;
+
+    switch (activity.type) {
+      case 'journal_entry':
+        navigate(`/journal/${activity.reference_id}`);
+        break;
+      case 'moodboard':
+        navigate('/moodboard');
+        break;
+      case 'goal':
+      case 'milestone':
+        navigate('/dashboard#goals');
+        break;
+      default:
+        break;
+    }
+  };
+
+  if (isLoading && offset === 0) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="animate-pulse">
+            <div className="flex items-start space-x-3">
+              <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <p className="text-text-secondary">Failed to load activity feed</p>
+        <Button onClick={() => refetch()} size="small" variant="secondary" className="mt-2">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  const activities = data?.activities || [];
+
+  if (activities.length === 0 && offset === 0) {
+    return (
+      <div className="text-center py-8">
+        <Activity className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <p className="text-text-secondary">No activity yet. Start by creating a journal entry or vision board!</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="text-center py-8">
-      <p className="text-text-secondary">Activity feed coming soon...</p>
+    <div className="space-y-4">
+      {activities.map((activity: ActivityItem) => (
+        <div
+          key={activity.id}
+          onClick={() => handleActivityClick(activity)}
+          className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+        >
+          <div className="flex-shrink-0 w-10 h-10 bg-gradient-to-br from-primary/10 to-accent/10 rounded-full flex items-center justify-center text-lg">
+            {activity.icon}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-text-primary">
+                  {activity.title}
+                </p>
+                {activity.description && (
+                  <p className="text-xs text-text-secondary mt-1 line-clamp-2">
+                    {activity.description}
+                  </p>
+                )}
+              </div>
+              <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-2 flex-shrink-0" />
+            </div>
+            <div className="flex items-center mt-2 space-x-2">
+              <span className={`text-xs font-medium ${activity.color}`}>
+                {activity.action}
+              </span>
+              <span className="text-xs text-text-secondary flex items-center">
+                <Clock className="w-3 h-3 mr-1" />
+                {activity.timeAgo}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+      {data?.hasMore && (
+        <div className="text-center pt-4">
+          <Button
+            onClick={() => setOffset(offset + limit)}
+            size="small"
+            variant="secondary"
+            loading={isLoading}
+          >
+            Load More
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
