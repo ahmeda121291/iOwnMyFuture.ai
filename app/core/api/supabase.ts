@@ -100,12 +100,30 @@ export const signOut = async () => {
 // Stripe helpers
 export const getUserSubscription = async (_userId?: string) => {
   try {
-    // Note: userId parameter is kept for backwards compatibility but not used.
-    // The subscriptions view no longer has a user_id column - RLS now scopes results to the authenticated user.
+    // First try the user_subscription_view which has all the fields we need
+    const { data: viewData, error: viewError } = await supabase
+      .from('user_subscription_view')
+      .select('*')
+      .maybeSingle();
+    
+    if (!viewError && viewData) {
+      // Check if subscription is active and current
+      const isActive = viewData.status === 'active' || viewData.status === 'trialing';
+      const isCurrent = viewData.current_period_end ? new Date(viewData.current_period_end) > new Date() : false;
+      
+      // Return the subscription if it's active and current
+      if (isActive && isCurrent) {
+        return viewData;
+      }
+    }
+    
+    // Fallback to direct query with proper handling of multiple rows
     const { data, error } = await supabase
       .from('subscriptions')
       .select('*')
-      .maybeSingle();
+      .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
     
     if (error) {
       if (error.code === 'PGRST116') {
@@ -115,7 +133,19 @@ export const getUserSubscription = async (_userId?: string) => {
       console.warn('Error getting user subscription:', error);
       return null;
     }
-    return data;
+    
+    if (!data || data.length === 0) {
+      return null;
+    }
+    
+    // Get the most recent subscription
+    const subscription = data[0];
+    
+    // Check if subscription is valid
+    const isActive = subscription.status === 'active' || subscription.status === 'trialing';
+    const isCurrent = subscription.current_period_end ? new Date(subscription.current_period_end) > new Date() : false;
+    
+    return (isActive && isCurrent) ? subscription : null;
   } catch (error) {
     console.warn('Unexpected error in getUserSubscription:', error);
     return null;

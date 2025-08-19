@@ -106,6 +106,23 @@ async function handleEvent(event: Stripe.Event) {
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   const { customer: customerId, client_reference_id: userId, mode, payment_status } = session;
   
+  // Extract price information from line items if available
+  let priceId: string | null = null;
+  let planName = 'Pro';
+  const amount = session.amount_total ? session.amount_total / 100 : 0;
+  
+  // Try to get price ID from line items
+  if (session.line_items?.data?.[0]?.price?.id) {
+    priceId = session.line_items.data[0].price.id;
+  }
+  
+  // Determine plan name based on amount or price ID
+  if (priceId === 'price_1QS0vnRqrkWBY7xJP77VQkUP' || amount === 180) {
+    planName = 'Pro Annual';
+  } else if (priceId === 'price_1QS0uQRqrkWBY7xJQnRLMhvL' || amount === 18) {
+    planName = 'Pro Monthly';
+  }
+  
   if (!customerId || typeof customerId !== 'string') {
     throw new Error('No customer ID found in checkout session');
   }
@@ -125,13 +142,35 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
           stripe_customer_id: customerId,
           stripe_subscription_id: null,
           status: 'pending',
+          subscription_status: 'pending',
+          price_id: priceId,
+          plan_name: planName,
+          updated_at: new Date().toISOString()
         }, {
           onConflict: 'user_id',
         });
         
       if (linkError) {
         console.error('Error linking user to Stripe customer:', linkError);
-        throw new Error(`Failed to link user ${userId} to Stripe customer ${customerId}`);
+        // Try using the sync function as fallback
+        try {
+          const { error: syncError } = await supabase.rpc('sync_subscription_from_stripe', {
+            p_user_id: userId,
+            p_stripe_customer_id: customerId,
+            p_stripe_subscription_id: null,
+            p_status: 'pending',
+            p_price_id: priceId,
+            p_plan_name: planName
+          });
+          
+          if (syncError) {
+            console.error('Failed to sync via function:', syncError);
+            throw new Error(`Failed to link user ${userId} to Stripe customer ${customerId}`);
+          }
+        } catch (funcError) {
+          console.error('Error calling sync function:', funcError);
+          throw new Error(`Failed to link user ${userId} to Stripe customer ${customerId}`);
+        }
       }
       
       console.info(`Successfully linked user ${userId} to Stripe customer ${customerId}`);
@@ -145,7 +184,11 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       if (userId) {
         const { error: statusError } = await supabase
           .from('subscriptions')
-          .update({ status: 'active' })
+          .update({ 
+            status: 'active',
+            subscription_status: 'active',
+            updated_at: new Date().toISOString()
+          })
           .eq('user_id', userId);
           
         if (statusError) {
@@ -197,11 +240,15 @@ async function syncCustomerFromStripe(customerId: string) {
       .from('subscriptions')
       .select('user_id, stripe_subscription_id')
       .eq('stripe_customer_id', customerId)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1);
       
-    if (userLinkError || !userLink) {
+    if (userLinkError || !userLink || userLink.length === 0) {
       console.warn(`No user linked to Stripe customer ${customerId}`);
+      return;
     }
+    
+    const userSubscription = userLink[0];
     
     // Fetch latest subscription data from Stripe
     const subscriptions = await stripe.subscriptions.list({
@@ -231,14 +278,16 @@ async function syncCustomerFromStripe(customerId: string) {
       }
       
       // Update subscriptions table status
-      if (userLink?.user_id) {
+      if (userSubscription?.user_id) {
         const { error: statusError } = await supabase
           .from('subscriptions')
           .update({ 
             status: 'inactive',
+            subscription_status: 'inactive',
             stripe_subscription_id: null,
+            updated_at: new Date().toISOString()
           })
-          .eq('user_id', userLink.user_id);
+          .eq('user_id', userSubscription.user_id);
           
         if (statusError) {
           console.error('Error updating user subscription status:', statusError);
@@ -278,15 +327,22 @@ async function syncCustomerFromStripe(customerId: string) {
     }
     
     // Update subscriptions table with subscription ID and status
-    if (userLink?.user_id) {
+    if (userSubscription?.user_id) {
       const mappedStatus = mapStripeStatusToAppStatus(subscription.status);
+      const priceId = subscription.items.data[0]?.price.id;
       const { error: linkUpdateError } = await supabase
         .from('subscriptions')
         .update({ 
           stripe_subscription_id: subscription.id,
           status: mappedStatus,
+          subscription_status: subscription.status,
+          price_id: priceId,
+          current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          cancel_at_period_end: subscription.cancel_at_period_end,
+          updated_at: new Date().toISOString()
         })
-        .eq('user_id', userLink.user_id);
+        .eq('user_id', userSubscription.user_id);
         
       if (linkUpdateError) {
         console.error('Error updating subscription link:', linkUpdateError);
