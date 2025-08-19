@@ -10,6 +10,7 @@ import {
   Mail,
   Gift,
   CreditCard,
+  Clock,
 } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
@@ -43,6 +44,7 @@ export default function SuccessPage() {
   const [loading, setLoading] = useState(true);
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [canManualRetry, setCanManualRetry] = useState(false);
   
   const sessionId = searchParams.get('session_id');
   const MAX_RETRIES = 5;
@@ -117,6 +119,7 @@ export default function SuccessPage() {
             status: 'processing',
             paymentStatus: 'processing'
           });
+          setCanManualRetry(true); // Enable manual retry button
         }
       }
     } catch (error) {
@@ -240,17 +243,54 @@ export default function SuccessPage() {
                 <div className="col-span-2">
                   <span className="text-text-secondary">Status:</span>
                   <span className="inline-flex items-center ml-2">
-                    <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
-                    <span className="text-green-600 font-medium">Payment Successful</span>
+                    {sessionDetails.status === 'processing' || sessionDetails.paymentStatus === 'processing' ? (
+                      <>
+                        <Clock className="w-4 h-4 text-yellow-500 mr-1 animate-pulse" />
+                        <span className="text-yellow-600 font-medium">Payment Processing</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
+                        <span className="text-green-600 font-medium">Payment Successful</span>
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
-              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center text-green-800">
-                  <Mail className="w-4 h-4 mr-2" />
-                  <span className="text-sm">A confirmation email has been sent to {sessionDetails.email}</span>
+              {sessionDetails.status === 'processing' || sessionDetails.paymentStatus === 'processing' ? (
+                <>
+                  <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="flex items-center text-yellow-800">
+                      <Clock className="w-4 h-4 mr-2 animate-pulse" />
+                      <span className="text-sm">Your payment is still being processed. This can take a few minutes.</span>
+                    </div>
+                  </div>
+                  {canManualRetry && (
+                    <div className="mt-4 flex justify-center">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setRetryCount(0);
+                          setCanManualRetry(false);
+                          confirmPaymentAndUpdateSubscription();
+                        }}
+                        icon={<ArrowRight className="w-4 h-4" />}
+                        iconPosition="right"
+                      >
+                        Check Payment Status
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center text-green-800">
+                    <Mail className="w-4 h-4 mr-2" />
+                    <span className="text-sm">A confirmation email has been sent to {sessionDetails.email}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
