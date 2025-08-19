@@ -7,6 +7,7 @@ import {
   OPENAI_API_KEY as openaiApiKey,
   getCorsHeaders 
 } from '../_shared/config.ts';
+import { RateLimiter, getClientIP } from '../_shared/rate-limiter.ts';
 
 const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -170,56 +171,6 @@ const sanitizeInput = (input: string): string => {
     .substring(0, 50000); // Hard limit on input length
 };
 
-const checkRateLimit = async (userId: string): Promise<boolean> => {
-  // Simple rate limiting: max 50 requests per hour per user
-  // TODO: Replace with Redis or Supabase's rate-limit extension for production scale
-  // Current implementation uses database storage which may not scale well under high load
-  try {
-    // For now, we'll use a simple database approach with Supabase storage
-    const { data: rateLimitData } = await supabase
-      .from('user_rate_limits')
-      .select('request_count, last_reset')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
-    if (!rateLimitData) {
-      // First request for this user
-      await supabase.from('user_rate_limits').insert({
-        user_id: userId,
-        request_count: 1,
-        last_reset: now.toISOString()
-      });
-      return true;
-    }
-
-    const lastReset = new Date(rateLimitData.last_reset);
-    
-    if (lastReset < oneHourAgo) {
-      // Reset the counter
-      await supabase.from('user_rate_limits')
-        .update({ request_count: 1, last_reset: now.toISOString() })
-        .eq('user_id', userId);
-      return true;
-    }
-
-    if (rateLimitData.request_count >= 50) {
-      return false; // Rate limit exceeded
-    }
-
-    // Increment counter
-    await supabase.from('user_rate_limits')
-      .update({ request_count: rateLimitData.request_count + 1 })
-      .eq('user_id', userId);
-    
-    return true;
-  } catch (error) {
-    console.error('Rate limit check error:', error);
-    return true; // Allow request if rate limit check fails
-  }
-};
 
 const makeOpenAIRequest = async (messages: Array<{ role: string; content: string }>, maxTokens: number = 1000): Promise<string> => {
   if (!openaiApiKey) {
@@ -290,12 +241,52 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Check rate limiting
-    const rateLimitOk = await checkRateLimit(user.id);
-    if (!rateLimitOk) {
-      return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
+    // Check rate limiting with the new scalable implementation
+    const rateLimiter = new RateLimiter({
+      identifier: user.id,
+      maxRequests: 50, // 50 requests per hour for AI generation
+      windowMs: 60 * 60 * 1000, // 1 hour window
+      bucket: 'ai-generation'
+    });
+
+    const rateLimitResult = await rateLimiter.checkLimit();
+    const rateLimitHeaders = rateLimiter.createHeaders(rateLimitResult);
+
+    if (!rateLimitResult.allowed) {
+      return new Response(JSON.stringify({ 
+        error: 'Rate limit exceeded. Please try again later.',
+        retryAfter: rateLimitResult.retryAfter
+      }), {
         status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          ...rateLimitHeaders,
+          'Content-Type': 'application/json' 
+        },
+      });
+    }
+
+    // Also implement IP-based rate limiting for additional protection
+    const clientIP = getClientIP(req);
+    const ipLimiter = new RateLimiter({
+      identifier: clientIP,
+      maxRequests: 200, // More lenient for IP-based
+      windowMs: 60 * 60 * 1000, // 1 hour window
+      bucket: 'ai-generation-ip'
+    });
+
+    const ipRateLimitResult = await ipLimiter.checkLimit();
+    if (!ipRateLimitResult.allowed) {
+      return new Response(JSON.stringify({ 
+        error: 'Too many requests from this IP. Please try again later.',
+        retryAfter: ipRateLimitResult.retryAfter
+      }), {
+        status: 429,
+        headers: { 
+          ...corsHeaders, 
+          ...ipLimiter.createHeaders(ipRateLimitResult),
+          'Content-Type': 'application/json' 
+        },
       });
     }
 
@@ -421,7 +412,11 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 
+          ...corsHeaders, 
+          ...rateLimitHeaders, // Include rate limit info in successful responses
+          'Content-Type': 'application/json' 
+        },
       });
     } catch (error: unknown) {
       // Handle Zod validation errors

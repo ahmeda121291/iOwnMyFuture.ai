@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
+import { RateLimiter, getClientIP } from './rate-limiter.ts';
 
 const supabaseUrl = Deno.env.get('PROJECT_URL') ?? '';
 const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? '';
@@ -180,14 +181,29 @@ export const authenticateAndValidateCSRF = async (
       };
     }
 
-    // Check rate limiting
-    const rateLimitOk = await checkRateLimit(user.id);
-    if (!rateLimitOk) {
+    // Check rate limiting with the new scalable implementation
+    const rateLimiter = new RateLimiter({
+      identifier: user.id,
+      maxRequests: 100, // More lenient for general API calls
+      windowMs: 60 * 60 * 1000, // 1 hour window
+      bucket: 'api-general'
+    });
+
+    const rateLimitResult = await rateLimiter.checkLimit();
+    if (!rateLimitResult.allowed) {
+      const rateLimitHeaders = rateLimiter.createHeaders(rateLimitResult);
       return {
         success: false,
-        response: new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }), {
+        response: new Response(JSON.stringify({ 
+          error: 'Rate limit exceeded. Please try again later.',
+          retryAfter: rateLimitResult.retryAfter
+        }), {
           status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { 
+            ...corsHeaders, 
+            ...rateLimitHeaders,
+            'Content-Type': 'application/json' 
+          },
         }),
       };
     }
@@ -229,55 +245,6 @@ export const authenticateAndValidateCSRF = async (
   }
 };
 
-// Rate limiting check
-const checkRateLimit = async (userId: string): Promise<boolean> => {
-  try {
-    const { data: rateLimitData } = await supabase
-      .from('user_rate_limits')
-      .select('request_count, last_reset')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
-    if (!rateLimitData) {
-      // Create new rate limit entry
-      await supabase.from('user_rate_limits').insert({
-        user_id: userId,
-        request_count: 1,
-        last_reset: now.toISOString()
-      });
-      return true;
-    }
-
-    const lastReset = new Date(rateLimitData.last_reset);
-    
-    // Reset counter if more than an hour has passed
-    if (lastReset < oneHourAgo) {
-      await supabase.from('user_rate_limits')
-        .update({ request_count: 1, last_reset: now.toISOString() })
-        .eq('user_id', userId);
-      return true;
-    }
-
-    // Check rate limit (50 requests per hour)
-    if (rateLimitData.request_count >= 50) {
-      return false;
-    }
-
-    // Increment counter
-    await supabase.from('user_rate_limits')
-      .update({ request_count: rateLimitData.request_count + 1 })
-      .eq('user_id', userId);
-    
-    return true;
-  } catch (error) {
-    console.error('Rate limit check error:', error);
-    // Allow request on error to avoid blocking legitimate users
-    return true;
-  }
-};
 
 // Helper function to handle CORS preflight
 export const handleCORS = (corsHeaders: Record<string, string> = {
