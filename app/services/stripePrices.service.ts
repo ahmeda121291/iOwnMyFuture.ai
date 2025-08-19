@@ -16,13 +16,13 @@ export interface StripePrices {
 class StripePricesService {
   private cache: StripePrices | null = null;
   private cacheTimestamp: number | null = null;
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private readonly cacheDuration = 5 * 60 * 1000; // 5 minutes
   private fetchPromise: Promise<StripePrices> | null = null;
 
   async fetchPrices(): Promise<StripePrices> {
     // Return cached prices if still valid
     if (this.cache && this.cacheTimestamp && 
-        Date.now() - this.cacheTimestamp < this.CACHE_DURATION) {
+        Date.now() - this.cacheTimestamp < this.cacheDuration) {
       return this.cache;
     }
 
@@ -41,6 +41,8 @@ class StripePricesService {
       })
       .catch(error => {
         this.fetchPromise = null;
+        // Clear cache on error so next attempt will retry
+        this.clearCache();
         throw error;
       });
 
@@ -55,6 +57,7 @@ class StripePricesService {
     
     // Build headers - include auth token if available
     const headers: Record<string, string> = {
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       'Content-Type': 'application/json',
     };
     
@@ -66,7 +69,7 @@ class StripePricesService {
       method: 'GET',
       headers,
       mode: 'cors',
-      credentials: session ? 'include' : 'omit', // Only send credentials if authenticated
+      credentials: 'include', // Always include credentials to avoid CORS issues
     });
 
     if (!response.ok) {

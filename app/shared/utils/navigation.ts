@@ -59,11 +59,13 @@ export async function checkNavigationGuards(
     if (session && requirePro) {
       const subscription = await getUserSubscription(session.user.id);
       
+      // Check if subscription is valid (include multiple statuses)
+      const validStatuses = ['active', 'trialing', 'past_due', 'incomplete'];
       const hasProAccess = 
         subscription && 
-        subscription.subscription_status === 'active' &&
-        subscription.price_id &&
-        !subscription.cancel_at_period_end;
+        validStatuses.includes(subscription.subscription_status || subscription.status) &&
+        subscription.price_id;
+      // Note: We don't check cancel_at_period_end - users keep access until period ends
 
       if (!hasProAccess) {
         // No Pro subscription, redirect to upgrade
@@ -132,12 +134,14 @@ export async function canAccessProFeatures(): Promise<boolean> {
 
     const subscription = await getUserSubscription(session.user.id);
     
+    // Check if subscription is valid (include multiple statuses)
+    const validStatuses = ['active', 'trialing', 'past_due', 'incomplete'];
     return !!(
       subscription && 
-      subscription.subscription_status === 'active' &&
-      subscription.price_id &&
-      !subscription.cancel_at_period_end
+      validStatuses.includes(subscription.subscription_status || subscription.status) &&
+      subscription.price_id
     );
+    // Note: We don't check cancel_at_period_end - users keep access until period ends
   } catch {
     return false;
   }

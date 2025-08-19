@@ -101,48 +101,38 @@ export const signOut = async () => {
 export const getUserSubscription = async (_userId?: string) => {
   try {
     // Query the stripe_user_subscriptions view which has all the fields we need
-    // This view automatically scopes to the authenticated user via RLS
-    const { data, error } = await supabase
+    // Don't use maybeSingle() as it fails with multiple rows
+    const { data: allSubs, error } = await supabase
       .from('stripe_user_subscriptions')
       .select('*')
-      .maybeSingle();
+      .order('current_period_end', { ascending: false });
     
     if (error) {
-      if (error.code === 'PGRST116') {
-        // Multiple rows found - shouldn't happen with the view, but handle gracefully
-        console.warn('Multiple subscription rows found, fetching most recent');
-        
-        // Fetch all and return the most recent active one
-        const { data: allSubs, error: allError } = await supabase
-          .from('stripe_user_subscriptions')
-          .select('*')
-          .order('current_period_start', { ascending: false });
-        
-        if (allError || !allSubs || allSubs.length === 0) {
-          return null;
-        }
-        
-        // Find the first active subscription
-        const activeSub = allSubs.find(sub => 
-          (sub.subscription_status === 'active' || sub.subscription_status === 'trialing') &&
-          sub.current_period_end && new Date(sub.current_period_end) > new Date()
-        );
-        
-        return activeSub || null;
-      }
       console.warn('Error getting user subscription:', error);
       return null;
     }
     
-    if (!data) {
+    if (!allSubs || allSubs.length === 0) {
       return null;
     }
     
-    // Check if subscription is active and current
-    const isActive = data.subscription_status === 'active' || data.subscription_status === 'trialing';
-    const isCurrent = data.current_period_end ? new Date(data.current_period_end) > new Date() : false;
+    // Find the best valid subscription
+    // Valid statuses include: active, trialing, past_due, incomplete (still processing)
+    const validStatuses = ['active', 'trialing', 'past_due', 'incomplete'];
     
-    return (isActive && isCurrent) ? data : null;
+    // Find a subscription that:
+    // 1. Has a valid status
+    // 2. Has current_period_end in the future (or no end date yet)
+    // Note: We DON'T exclude based on cancel_at_period_end - users keep access until period ends
+    const validSub = allSubs.find(sub => {
+      const hasValidStatus = validStatuses.includes(sub.subscription_status || sub.status);
+      const isCurrentPeriod = !sub.current_period_end || new Date(sub.current_period_end) > new Date();
+      return hasValidStatus && isCurrentPeriod;
+    });
+    
+    // Return the subscription even if cancelled, as long as it's still within the period
+    // The UI can check cancel_at_period_end to show a warning
+    return validSub || null;
   } catch (error) {
     console.warn('Unexpected error in getUserSubscription:', error);
     return null;

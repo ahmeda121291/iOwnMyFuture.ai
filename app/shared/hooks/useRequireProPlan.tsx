@@ -40,7 +40,7 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
   const {
     redirectTo = '/upgrade',
     showToast = true,
-    toastMessage = 'MyFutureSelf is a Pro-only platform. Subscribe to unlock all features.',
+    toastMessage = 'I Own My Future is a Pro-only platform. Subscribe to unlock all features.',
     skipRedirect = false
   } = options;
   
@@ -71,12 +71,14 @@ export function useRequireProPlan(options: UseRequireProPlanOptions = {}): UseRe
         const userSubscription = await getUserSubscription(session.user.id);
         setSubscription(userSubscription);
         
-        // Check if user has active Pro subscription
+        // Check if user has valid Pro subscription
+        // Include active, trialing, past_due, and incomplete (still processing) statuses
+        // Don't block based on cancel_at_period_end - users keep access until period ends
+        const validStatuses = ['active', 'trialing', 'past_due', 'incomplete'];
         const hasProAccess = 
           userSubscription && 
-          userSubscription.subscription_status === 'active' &&
-          userSubscription.price_id && // Has an active price/plan
-          !userSubscription.cancel_at_period_end; // Not scheduled for cancellation
+          validStatuses.includes(userSubscription.subscription_status || userSubscription.status) &&
+          userSubscription.price_id; // Has a price/plan
         
         setIsProActive(hasProAccess);
         

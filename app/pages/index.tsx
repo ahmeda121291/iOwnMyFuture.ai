@@ -95,9 +95,8 @@ export default function LandingPage() {
   // Smart CTA handler - routes based on auth status
   const handleStartJournaling = async () => {
     try {
-      // Wait for auth check to complete
+      // Don't show toast while checking - just wait
       if (isAuthChecking) {
-        toast.loading('Checking authentication...');
         return;
       }
       

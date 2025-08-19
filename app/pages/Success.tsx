@@ -10,7 +10,6 @@ import {
   Mail,
   Gift,
   CreditCard,
-  XCircle
 } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
@@ -43,8 +42,10 @@ export default function SuccessPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [sessionDetails, setSessionDetails] = useState<SessionDetails | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   
   const sessionId = searchParams.get('session_id');
+  const MAX_RETRIES = 5;
 
   const confirmPaymentAndUpdateSubscription = useCallback(async () => {
     if (!sessionId) {
@@ -98,11 +99,25 @@ export default function SuccessPage() {
         }, 3000);
       } else {
         // Payment is still processing
-        toast.info('Payment is being processed. Please wait...');
-        // Retry after 3 seconds
-        setTimeout(() => {
-          confirmPaymentAndUpdateSubscription();
-        }, 3000);
+        if (retryCount < MAX_RETRIES) {
+          toast.info(`Payment is being processed. Please wait... (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
+          // Retry after 3 seconds
+          setRetryCount(prev => prev + 1);
+          setTimeout(() => {
+            confirmPaymentAndUpdateSubscription();
+          }, 3000);
+        } else {
+          // Max retries reached
+          toast.error('Payment verification is taking longer than expected. Please check your email for confirmation or contact support.');
+          setSessionDetails({
+            sessionId,
+            amount: 0,
+            plan: 'Pro',
+            email: user?.email || '',
+            status: 'processing',
+            paymentStatus: 'processing'
+          });
+        }
       }
     } catch (error) {
       errorTracker.trackError(error, { component: 'Success', action: 'confirmPayment' });
@@ -115,7 +130,7 @@ export default function SuccessPage() {
     } finally {
       setLoading(false);
     }
-  }, [sessionId, user?.id, user?.email, user?.user_metadata?.full_name, navigate]);
+  }, [sessionId, user?.email, user?.user_metadata?.full_name, navigate, retryCount]);
 
   useEffect(() => {
     if (user?.id && sessionId) {

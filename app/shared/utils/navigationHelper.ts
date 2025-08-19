@@ -99,7 +99,7 @@ export async function handlePostAuthNavigation(
       }
       
       if (isNewUser) {
-        toast.success('Welcome to MyFutureSelf Pro! 🎉');
+        toast.success('Welcome to I Own My Future Pro! 🎉');
       }
       return;
     }
