@@ -1,3 +1,4 @@
+import { supabase } from '../core/api/supabase';
 
 export interface StripePrice {
   priceId: string;
@@ -12,7 +13,7 @@ export interface StripePrices {
   yearly: StripePrice;
 }
 
-class StripePricesService {
+class StripePricesServiceV2 {
   private cache: StripePrices | null = null;
   private cacheTimestamp: number | null = null;
   private readonly cacheDuration = 5 * 60 * 1000; // 5 minutes
@@ -49,50 +50,47 @@ class StripePricesService {
   }
 
   private async fetchPricesFromAPI(): Promise<StripePrices> {
-    // Prices are public - no authentication needed
-    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-prices`;
-    
-    // Simple headers for public endpoint
-    const headers: Record<string, string> = {
-      // eslint-disable-next-line @typescript-eslint/naming-convention
-      'Content-Type': 'application/json',
-    };
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers,
-      mode: 'cors',
-      credentials: 'omit', // Don't send cookies to avoid CORS issues
-    });
+    try {
+      // Use Supabase client to call the function
+      // This handles CORS and authentication automatically
+      const { data, error } = await supabase.functions.invoke('stripe-prices', {
+        method: 'GET',
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Failed to fetch prices' }));
-      throw new Error(errorData.error || `Failed to fetch prices (${response.status})`);
+      if (error) {
+        console.error('Error fetching prices from Supabase function:', error);
+        throw new Error(error.message || 'Failed to fetch prices');
+      }
+
+      if (!data) {
+        throw new Error('No data returned from stripe-prices function');
+      }
+
+      // Validate the response structure
+      if (!data.monthly || !data.yearly) {
+        throw new Error('Invalid price data received from server');
+      }
+
+      return {
+        monthly: {
+          priceId: data.monthly.priceId,
+          productId: data.monthly.productId,
+          amount: data.monthly.amount,
+          currency: data.monthly.currency,
+          interval: data.monthly.interval as 'month',
+        },
+        yearly: {
+          priceId: data.yearly.priceId,
+          productId: data.yearly.productId,
+          amount: data.yearly.amount,
+          currency: data.yearly.currency,
+          interval: data.yearly.interval as 'year',
+        },
+      };
+    } catch (error) {
+      console.error('Failed to fetch prices:', error);
+      throw error instanceof Error ? error : new Error('Failed to fetch prices');
     }
-
-    const data = await response.json();
-    
-    // Validate the response structure
-    if (!data.monthly || !data.yearly) {
-      throw new Error('Invalid price data received from server');
-    }
-
-    return {
-      monthly: {
-        priceId: data.monthly.priceId,
-        productId: data.monthly.productId,
-        amount: data.monthly.amount,
-        currency: data.monthly.currency,
-        interval: data.monthly.interval as 'month',
-      },
-      yearly: {
-        priceId: data.yearly.priceId,
-        productId: data.yearly.productId,
-        amount: data.yearly.amount,
-        currency: data.yearly.currency,
-        interval: data.yearly.interval as 'year',
-      },
-    };
   }
 
   clearCache(): void {
@@ -119,4 +117,4 @@ class StripePricesService {
   }
 }
 
-export const stripePricesService = new StripePricesService();
+export const stripePricesServiceV2 = new StripePricesServiceV2();

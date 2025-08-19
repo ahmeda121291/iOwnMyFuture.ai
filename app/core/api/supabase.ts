@@ -18,10 +18,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Auth helpers
 export const getCurrentUser = async (): Promise<UserProfile | null> => {
   try {
+    // First check if we have a session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      // No session, user is not logged in (this is not an error)
+      return null;
+    }
+    
     const { data: { user }, error } = await supabase.auth.getUser();
     
     if (error) {
-      console.warn('Error getting current user:', error.message);
+      // Only log actual errors, not missing sessions
+      if (error.message !== 'Auth session missing!') {
+        console.warn('Error getting current user:', error.message);
+      }
       return null;
     }
     

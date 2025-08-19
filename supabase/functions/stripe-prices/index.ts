@@ -1,14 +1,9 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
-import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { 
-  SUPABASE_URL as supabaseUrl,
-  SERVICE_ROLE_KEY as serviceRoleKey,
   STRIPE_SECRET_KEY as stripeSecret,
   getCorsHeaders
 } from '../_shared/config.ts';
-
-const supabase = createClient(supabaseUrl, serviceRoleKey);
 const stripe = new Stripe(stripeSecret, {
   appInfo: { name: 'I Own My Future', version: '1.0.0' },
 });
@@ -18,7 +13,8 @@ const MONTHLY_PRODUCT_ID = 'prod_SlmIZrU6E29IYr';
 const YEARLY_PRODUCT_ID = 'prod_SlmIrtY1LuVNsA';
 
 Deno.serve(async (req: Request) => {
-  const corsHeaders = getCorsHeaders(req);
+  // Don't allow credentials for public pricing endpoint
+  const corsHeaders = getCorsHeaders(req, false);
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -32,20 +28,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // Authentication is optional for fetching prices
-    const token = req.headers.get('authorization')?.replace('Bearer ', '');
-    let user = null;
-    
-    if (token) {
-      const { data, error: authError } = await supabase.auth.getUser(token);
-      user = data?.user;
-      if (authError) {
-        console.warn('stripe-prices auth error (non-fatal):', authError);
-      }
-    }
-    
-    // Log whether user is authenticated (for debugging)
-    console.log('Fetching prices for:', user ? `user ${user.id}` : 'anonymous user');
+    // This is a public endpoint - no authentication needed
+    // Prices are the same for all users
+    console.log('Fetching public pricing information');
 
     // Retrieve prices for both products
     const [monthlyPrices, yearlyPrices] = await Promise.all([
