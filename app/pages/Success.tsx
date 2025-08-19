@@ -8,7 +8,9 @@ import {
   Target,
   Calendar,
   Mail,
-  Gift
+  Gift,
+  CreditCard,
+  XCircle
 } from 'lucide-react';
 import { supabase } from '../core/api/supabase';
 import { useRequireProPlan } from '../shared/hooks/useRequireProPlan';
@@ -23,6 +25,10 @@ interface SessionDetails {
   amount: number;
   plan: string;
   email: string;
+  status?: string;
+  paymentStatus?: string;
+  currency?: string;
+  customerName?: string;
 }
 
 export default function SuccessPage() {
@@ -45,44 +51,62 @@ export default function SuccessPage() {
       setLoading(false);
       toast.error('No session ID found');
       // Use safe navigation with Pro check
-      await safeNavigate(navigate, '/dashboard', { requireAuth: true, requirePro: true });
-      return;
-    }
-
-    if (!user?.id) {
-      // Wait for user to be loaded
+      await safeNavigate(navigate, '/dashboard', { requireAuth: true, requirePro: false });
       return;
     }
 
     try {
-
-      // Call edge function to verify payment and update subscription
-      const { data, error } = await supabase.functions.invoke('confirm-payment', {
-        body: { sessionId, userId: user.id }
+      // First, retrieve the Stripe session details
+      const { data: stripeSession, error: sessionError } = await supabase.functions.invoke('get-stripe-session', {
+        body: { session_id: sessionId }
       });
 
-      if (error) {
-        throw error;
+      if (sessionError) {
+        throw sessionError;
       }
 
-      if (data?.success) {
+      if (!stripeSession) {
+        throw new Error('No session data returned');
+      }
+
+      // Check if payment was successful
+      const isSuccessful = stripeSession.payment_status === 'paid' || stripeSession.status === 'complete';
+      
+      if (isSuccessful) {
         setSessionDetails({
           sessionId,
-          amount: data.amount || 180,
-          plan: data.plan || 'Pro',
-          email: user.email || ''
+          amount: stripeSession.amount_total ? stripeSession.amount_total / 100 : 180,
+          plan: stripeSession.mode === 'subscription' ? 'Pro' : 'One-time',
+          email: stripeSession.customer_email || user?.email || '',
+          status: stripeSession.status,
+          paymentStatus: stripeSession.payment_status,
+          currency: stripeSession.currency || 'usd',
+          customerName: stripeSession.customer_name || user?.user_metadata?.full_name || 'Customer'
         });
         
         // Clear the redirect path from session storage
         sessionStorage.removeItem('redirectAfterUpgrade');
         
-        toast.success('Payment confirmed! Your Pro subscription is now active.');
+        toast.success('Payment confirmed! Your subscription is now active.');
+        
+        // The webhook will send the confirmation email
+        // No need to send it from here
+      } else if (stripeSession.payment_status === 'unpaid' || stripeSession.status === 'expired') {
+        toast.error('Payment was not completed successfully');
+        setTimeout(async () => {
+          await safeNavigate(navigate, '/pricing', { requireAuth: false });
+        }, 3000);
       } else {
-        throw new Error('Payment confirmation failed');
+        // Payment is still processing
+        toast.info('Payment is being processed. Please wait...');
+        // Retry after 3 seconds
+        setTimeout(() => {
+          confirmPaymentAndUpdateSubscription();
+        }, 3000);
       }
     } catch (error) {
       errorTracker.trackError(error, { component: 'Success', action: 'confirmPayment' });
-      toast.error('Failed to confirm payment. Please contact support.');
+      toast.error('Failed to retrieve payment information. Please contact support.');
       
       // Still redirect to dashboard after a delay with auth check
       setTimeout(async () => {
@@ -91,7 +115,7 @@ export default function SuccessPage() {
     } finally {
       setLoading(false);
     }
-  }, [sessionId, user?.id, user?.email, navigate]);
+  }, [sessionId, user?.id, user?.email, user?.user_metadata?.full_name, navigate]);
 
   useEffect(() => {
     if (user?.id && sessionId) {
@@ -172,7 +196,10 @@ export default function SuccessPage() {
 
           {sessionDetails && (
             <div className="card max-w-2xl mx-auto mb-8">
-              <h3 className="font-semibold text-text-primary mb-4">Payment Confirmation</h3>
+              <div className="flex items-center mb-4">
+                <CreditCard className="w-5 h-5 text-green-600 mr-2" />
+                <h3 className="font-semibold text-text-primary">Payment Confirmation</h3>
+              </div>
               <div className="grid md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-text-secondary">Plan:</span>
@@ -180,15 +207,33 @@ export default function SuccessPage() {
                 </div>
                 <div>
                   <span className="text-text-secondary">Amount:</span>
-                  <span className="text-text-primary font-medium ml-2">${sessionDetails.amount}</span>
+                  <span className="text-text-primary font-medium ml-2">
+                    {new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: sessionDetails.currency?.toUpperCase() || 'USD'
+                    }).format(sessionDetails.amount)}
+                  </span>
                 </div>
                 <div>
-                  <span className="text-text-secondary">Session ID:</span>
+                  <span className="text-text-secondary">Transaction ID:</span>
                   <span className="text-text-primary font-mono text-xs ml-2">{sessionDetails.sessionId.slice(0, 20)}...</span>
                 </div>
                 <div>
                   <span className="text-text-secondary">Billed to:</span>
                   <span className="text-text-primary font-medium ml-2">{sessionDetails.email}</span>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-text-secondary">Status:</span>
+                  <span className="inline-flex items-center ml-2">
+                    <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
+                    <span className="text-green-600 font-medium">Payment Successful</span>
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                <div className="flex items-center text-green-800">
+                  <Mail className="w-4 h-4 mr-2" />
+                  <span className="text-sm">A confirmation email has been sent to {sessionDetails.email}</span>
                 </div>
               </div>
             </div>

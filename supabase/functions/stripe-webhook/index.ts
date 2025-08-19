@@ -8,6 +8,11 @@ import {
   SERVICE_ROLE_KEY as serviceRoleKey
 } from '../_shared/config.ts';
 
+// Get environment variables for email
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'noreply@iownmyfuture.ai';
+const APP_URL = Deno.env.get('APP_URL') || 'https://iownmyfuture.ai';
+
 // Initialize clients
 const stripe = new Stripe(stripeSecret, {
   appInfo: { name: 'MyFutureSelf', version: '1.0.0' },
@@ -106,6 +111,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   }
   
   console.info(`Processing ${mode} checkout session for customer: ${customerId}`);
+  
+  // Send confirmation email
+  await sendConfirmationEmail(session);
   
   try {
     // First, link the Stripe customer to the user if we have a userId
@@ -309,5 +317,124 @@ function mapStripeStatusToAppStatus(stripeStatus: string): string {
       return 'unpaid';
     default:
       return 'inactive';
+  }
+}
+
+async function sendConfirmationEmail(session: Stripe.Checkout.Session) {
+  if (!RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not configured, skipping email');
+    return;
+  }
+
+  const customerEmail = session.customer_details?.email;
+  const customerName = session.customer_details?.name || 'Customer';
+  const amountTotal = session.amount_total || 0;
+  const currency = session.currency || 'usd';
+  
+  if (!customerEmail) {
+    console.error('No customer email found in session');
+    return;
+  }
+
+  // Format amount for display
+  const formattedAmount = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(amountTotal / 100);
+
+  const emailData = {
+    from: `MyFutureSelf <${FROM_EMAIL}>`,
+    to: customerEmail,
+    subject: 'Payment Confirmation - MyFutureSelf',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Payment Confirmation</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; }
+          .amount { font-size: 32px; color: #667eea; font-weight: bold; margin: 20px 0; }
+          .details { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+          .detail-row:last-child { border-bottom: none; }
+          .button { display: inline-block; padding: 12px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Payment Successful!</h1>
+          </div>
+          <div class="content">
+            <p>Hi ${customerName},</p>
+            <p>Thank you for your purchase! Your payment has been successfully processed.</p>
+            
+            <div class="amount">${formattedAmount}</div>
+            
+            <div class="details">
+              <div class="detail-row">
+                <span><strong>Transaction ID:</strong></span>
+                <span>${session.id}</span>
+              </div>
+              <div class="detail-row">
+                <span><strong>Date:</strong></span>
+                <span>${new Date().toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}</span>
+              </div>
+              <div class="detail-row">
+                <span><strong>Payment Method:</strong></span>
+                <span>${session.payment_method_types?.[0] || 'Card'}</span>
+              </div>
+              ${session.mode === 'subscription' ? `
+              <div class="detail-row">
+                <span><strong>Subscription:</strong></span>
+                <span>Active</span>
+              </div>
+              ` : ''}
+            </div>
+            
+            <p>You can access your account and all premium features immediately.</p>
+            
+            <center>
+              <a href="${APP_URL}/dashboard" class="button">Go to Dashboard</a>
+            </center>
+          </div>
+          <div class="footer">
+            <p>If you have any questions, please contact our support team.</p>
+            <p>&copy; ${new Date().getFullYear()} MyFutureSelf. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `,
+  };
+
+  try {
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailData),
+    });
+
+    if (!emailResponse.ok) {
+      const errorText = await emailResponse.text();
+      console.error('Failed to send confirmation email:', errorText);
+    } else {
+      const emailResult = await emailResponse.json();
+      console.log('Confirmation email sent:', emailResult.id);
+    }
+  } catch (error) {
+    console.error('Error sending email:', error);
   }
 }
