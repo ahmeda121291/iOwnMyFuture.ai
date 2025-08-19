@@ -117,7 +117,7 @@ export interface Subscription {
 export interface SocialIntegration {
   id: string;
   user_id: string;
-  service_name: 'facebook' | 'instagram' | 'twitter' | 'linkedin' | 'pinterest';
+  service_name: 'facebook' | 'instagram' | 'twitter' | 'linkedin' | 'pinterest' | 'gmail';
   service_user_id?: string;
   connected: boolean;
   auth_token?: string;

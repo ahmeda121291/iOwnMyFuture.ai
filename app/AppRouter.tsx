@@ -25,6 +25,7 @@ import InsightsPage from './pages/insights';
 import ProfilePage from './pages/Profile';
 import AdminPage from './pages/Admin';
 import ShareSnapshot from './pages/ShareSnapshot';
+import OAuthCallback from './pages/OAuthCallback';
 import NotFoundPage from './pages/NotFound';
 
 // Page transition variants
@@ -119,6 +120,13 @@ function AnimatedRoutes() {
         <Route path="/share/:id" element={
           <AnimatedPage>
             <ShareSnapshot />
+          </AnimatedPage>
+        } />
+
+        {/* OAuth Callback Route */}
+        <Route path="/oauth/callback" element={
+          <AnimatedPage>
+            <OAuthCallback />
           </AnimatedPage>
         } />
 
