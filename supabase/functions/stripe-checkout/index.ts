@@ -1,18 +1,14 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import Stripe from 'npm:stripe@17.7.0';
-import { createClient } from 'npm:@supabase/supabase-js@2.49.1';
 import { z } from 'npm:zod@3.25.76';
 import { authenticateAndValidateCSRF } from '../_shared/csrf-middleware.ts';
 import type { AuthenticatedUser } from '../_shared/csrf-middleware.ts';
 import { 
-  SUPABASE_URL as supabaseUrl,
-  SERVICE_ROLE_KEY as serviceRoleKey,
   STRIPE_SECRET_KEY as stripeSecret,
   getCorsHeaders 
 } from '../_shared/config.ts';
 
-// Initialize clients
-const supabase = createClient(supabaseUrl, serviceRoleKey);
+// Initialize Stripe client
 const stripe = new Stripe(stripeSecret, {
   appInfo: { name: 'I Own My Future', version: '1.0.0' },
 });
@@ -118,9 +114,6 @@ Deno.serve(async (req) => {
     // eslint-disable-next-line no-console
     console.log(`[stripe-checkout] Processing request for user: ${user.email}`);
 
-    // Use Stripe API directly instead of database table
-    let customerId: string | null = null;
-
     // CRITICAL: Validate price_id exists and is active
     try {
       // eslint-disable-next-line no-console
@@ -168,22 +161,23 @@ Deno.serve(async (req) => {
       return corsResponse(req, { error: `Invalid or inaccessible price ID: ${priceError.message}` }, 400);
     }
 
-    // Try to find an existing customer via Stripe using a search by email
+    // Use Stripe-only approach: search for existing customer by email
     // eslint-disable-next-line no-console
     console.log(`[stripe-checkout] Searching for existing Stripe customer with email: ${user.email}`);
     
-    const existingCustomers = await stripe.customers.list({
+    const existingStripeCustomers = await stripe.customers.list({
       email: user.email,
       limit: 1,
     });
-
-    if (existingCustomers.data.length > 0) {
-      customerId = existingCustomers.data[0].id;
+    
+    let customerId: string;
+    if (existingStripeCustomers.data.length > 0) {
+      customerId = existingStripeCustomers.data[0].id;
       // eslint-disable-next-line no-console
-      console.log(`[stripe-checkout] Found existing Stripe customer: ${customerId} for user ${user.id}`);
+      console.log(`[stripe-checkout] Found existing Stripe customer: ${customerId}`);
       
       // Update metadata if needed to ensure supabase_user_id is set
-      const existingCustomer = existingCustomers.data[0];
+      const existingCustomer = existingStripeCustomers.data[0];
       if (!existingCustomer.metadata?.supabase_user_id) {
         // eslint-disable-next-line no-console
         console.log(`[stripe-checkout] Updating customer ${customerId} metadata with supabase_user_id`);
@@ -193,7 +187,7 @@ Deno.serve(async (req) => {
       }
     } else {
       // eslint-disable-next-line no-console
-      console.log(`[stripe-checkout] No existing customer found, creating new Stripe customer for user ${user.id}`);
+      console.log(`[stripe-checkout] No existing customer found, creating new Stripe customer`);
       
       const newCustomer = await stripe.customers.create({
         email: user.email,
@@ -202,49 +196,41 @@ Deno.serve(async (req) => {
       
       customerId = newCustomer.id;
       // eslint-disable-next-line no-console
-      console.log(`[stripe-checkout] Created new Stripe customer: ${customerId} with metadata supabase_user_id: ${user.id}`);
+      console.log(`[stripe-checkout] Created new Stripe customer: ${customerId}`);
     }
 
-    // Handle subscription tracking if needed
-    if (mode === 'subscription' && customerId) {
-      // Check if we have a subscription record (optional - can be removed if not needed)
-      const { data: subscription, error: getSubscriptionError } = await supabase
-        .from('stripe_subscriptions')
-        .select('status')
-        .eq('customer_id', customerId)
-        .maybeSingle();
-
-      if (getSubscriptionError) {
+    // Check for existing active subscriptions in Stripe (not database)
+    if (mode === 'subscription') {
+      // eslint-disable-next-line no-console
+      console.log(`[stripe-checkout] Checking for existing active subscriptions for customer ${customerId}`);
+      
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'active',
+        limit: 1,
+      });
+      
+      if (subscriptions.data.length > 0) {
         // eslint-disable-next-line no-console
-        console.warn('[stripe-checkout] Could not check subscription status:', getSubscriptionError.message);
-        // Continue anyway - don't block checkout
-      } else if (subscription?.status === 'active' || subscription?.status === 'trialing') {
-        // Prevent creating a new subscription if one is already active
-        // eslint-disable-next-line no-console
-        console.error(`User ${user.id} attempted to create subscription while having active status: ${subscription.status}`);
+        console.error(`[stripe-checkout] Customer ${customerId} already has an active subscription`);
         return corsResponse(req, { error: 'Active subscription already exists' }, 400);
-      } else if (!subscription) {
-        // Optionally create subscription record (can be handled by webhook instead)
-        const { error: createSubscriptionError } = await supabase.from('stripe_subscriptions').insert({
-          customer_id: customerId,
-          status: 'not_started',
-        });
-
-        if (createSubscriptionError) {
-          // eslint-disable-next-line no-console
-          console.warn('[stripe-checkout] Could not create subscription record:', createSubscriptionError.message);
-          // Continue anyway - webhook will handle it
-        }
+      }
+      
+      // Also check for trialing subscriptions
+      const trialingSubscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'trialing',
+        limit: 1,
+      });
+      
+      if (trialingSubscriptions.data.length > 0) {
+        // eslint-disable-next-line no-console
+        console.error(`[stripe-checkout] Customer ${customerId} already has a trialing subscription`);
+        return corsResponse(req, { error: 'Trialing subscription already exists' }, 400);
       }
     }
 
-    // CRITICAL: Verify customer belongs to authenticated user before creating session
-    if (!customerId) {
-      // eslint-disable-next-line no-console
-      console.error(`[stripe-checkout] No customer ID available for user ${user.id}`);
-      return corsResponse(req, { error: 'Failed to initialize customer' }, 500);
-    }
-    
+    // Verify the Stripe customer before creating session
     const stripeCustomer = await stripe.customers.retrieve(customerId);
     if (stripeCustomer.deleted) {
       // eslint-disable-next-line no-console
